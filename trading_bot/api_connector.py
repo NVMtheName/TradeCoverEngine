@@ -332,6 +332,38 @@ class APIConnector:
                 else:
                     logger.error(f"Failed to get stock data for {symbol}: {response.text}")
                     return {'dates': [], 'prices': [], 'volumes': []}
+                    
+            elif self.provider == 'schwab':
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=days)
+                
+                # Format dates as expected by Schwab API
+                formatted_start = start_date.strftime('%Y-%m-%d')
+                formatted_end = end_date.strftime('%Y-%m-%d')
+                
+                params = {
+                    'symbol': symbol,
+                    'startDate': formatted_start,
+                    'endDate': formatted_end,
+                    'interval': 'daily'
+                }
+                
+                response = self.session.get(
+                    f"{self.base_url}/market/history",
+                    params=params
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    bars = data.get('bars', [])
+                    return {
+                        'dates': [bar.get('date') for bar in bars],
+                        'prices': [bar.get('close') for bar in bars],
+                        'volumes': [bar.get('volume') for bar in bars]
+                    }
+                else:
+                    logger.error(f"Failed to get stock data for {symbol}: {response.text}")
+                    return {'dates': [], 'prices': [], 'volumes': []}
         
         except Exception as e:
             logger.error(f"Error getting stock data for {symbol}: {str(e)}")
@@ -414,6 +446,60 @@ class APIConnector:
                 else:
                     logger.error(f"Failed to get options chain for {symbol}: {response.text}")
                     return {'calls': [], 'puts': []}
+                    
+            elif self.provider == 'schwab':
+                # Set a default expiry date if none provided
+                if not expiry_date:
+                    future_date = datetime.now() + timedelta(days=30)  # Default to ~1 month out
+                    expiry_date = future_date.strftime('%Y-%m-%d')
+                
+                params = {
+                    'symbol': symbol,
+                    'expirationDate': expiry_date,
+                    'strikeCount': 10  # Number of strikes above and below current price
+                }
+                
+                response = self.session.get(
+                    f"{self.base_url}/market/options/chain",
+                    params=params
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    calls = []
+                    puts = []
+                    
+                    # Process call options
+                    for option in data.get('callOptions', []):
+                        calls.append({
+                            'strike': option.get('strikePrice'),
+                            'expiry': option.get('expirationDate'),
+                            'bid': option.get('bidPrice'),
+                            'ask': option.get('askPrice'),
+                            'delta': option.get('delta', 0),
+                            'theta': option.get('theta', 0),
+                            'iv': option.get('impliedVolatility', 0)
+                        })
+                    
+                    # Process put options
+                    for option in data.get('putOptions', []):
+                        puts.append({
+                            'strike': option.get('strikePrice'),
+                            'expiry': option.get('expirationDate'),
+                            'bid': option.get('bidPrice'),
+                            'ask': option.get('askPrice'),
+                            'delta': option.get('delta', 0),
+                            'theta': option.get('theta', 0),
+                            'iv': option.get('impliedVolatility', 0)
+                        })
+                    
+                    return {
+                        'calls': calls,
+                        'puts': puts
+                    }
+                else:
+                    logger.error(f"Failed to get options chain for {symbol}: {response.text}")
+                    return {'calls': [], 'puts': []}
         
         except Exception as e:
             logger.error(f"Error getting options chain for {symbol}: {str(e)}")
@@ -450,6 +536,20 @@ class APIConnector:
                 if response.status_code == 200:
                     data = response.json()
                     return data.get(symbol, {}).get('lastPrice')
+                else:
+                    logger.error(f"Failed to get current price for {symbol}: {response.text}")
+                    return None
+                    
+            elif self.provider == 'schwab':
+                response = self.session.get(
+                    f"{self.base_url}/market/quotes",
+                    params={'symbols': symbol}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    quote = data.get('quotes', {}).get(symbol, {})
+                    return quote.get('lastPrice')
                 else:
                     logger.error(f"Failed to get current price for {symbol}: {response.text}")
                     return None
@@ -498,6 +598,25 @@ class APIConnector:
                     return {
                         'success': True,
                         'order_id': response.headers.get('Location', '').split('/')[-1],
+                        'message': 'Order placed successfully'
+                    }
+                else:
+                    logger.error(f"Failed to place order: {response.text}")
+                    return {
+                        'success': False,
+                        'message': response.text
+                    }
+                    
+            elif self.provider == 'schwab':
+                response = self.session.post(
+                    f"{self.base_url}/trading/orders",
+                    json=order_details
+                )
+                
+                if response.status_code in (200, 201):
+                    return {
+                        'success': True,
+                        'order_id': response.json().get('orderId'),
                         'message': 'Order placed successfully'
                     }
                 else:
@@ -570,6 +689,39 @@ class APIConnector:
                                 'market_value': position.get('marketValue', 0),
                                 'unrealized_pl': position.get('currentDayProfitLoss', 0),
                                 'unrealized_plpc': position.get('currentDayProfitLossPercentage', 0)
+                            })
+                    
+                    return positions
+                else:
+                    logger.error(f"Failed to get positions: {response.text}")
+                    return []
+                    
+            elif self.provider == 'schwab':
+                # Get account ID from account info
+                account_info = self.get_account_info()
+                if not account_info:
+                    return []
+                    
+                account_id = account_info.get('account_id')
+                
+                response = self.session.get(
+                    f"{self.base_url}/accounts/{account_id}/positions"
+                )
+                
+                if response.status_code == 200:
+                    positions_data = response.json()
+                    positions = []
+                    
+                    for position in positions_data.get('positions', []):
+                        if position.get('assetType') == 'EQUITY':
+                            positions.append({
+                                'symbol': position.get('symbol'),
+                                'quantity': position.get('quantity', 0),
+                                'avg_entry_price': position.get('costBasis', 0) / position.get('quantity', 1),
+                                'current_price': position.get('marketPrice', 0),
+                                'market_value': position.get('marketValue', 0),
+                                'unrealized_pl': position.get('unrealizedPL', 0),
+                                'unrealized_plpc': position.get('unrealizedPLPercent', 0) * 100  # Convert to percentage
                             })
                     
                     return positions
