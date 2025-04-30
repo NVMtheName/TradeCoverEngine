@@ -36,6 +36,8 @@ class APIConnector:
             self._init_alpaca()
         elif self.provider == 'td_ameritrade':
             self._init_td_ameritrade()
+        elif self.provider == 'schwab':
+            self._init_schwab()
         else:
             raise ValueError(f"Unsupported API provider: {self.provider}")
     
@@ -70,6 +72,24 @@ class APIConnector:
         }
         
         logger.info("Initialized TD Ameritrade API connector")
+        
+    def _init_schwab(self):
+        """Initialize Charles Schwab API connection"""
+        self.session = requests.Session()
+        self.base_url = "https://api.schwabapi.com/v1"
+        
+        # Schwab APIs typically require OAuth2 authentication
+        # This is a simplified version; in practice, full OAuth2 flow would be needed
+        self.session.headers.update({
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        })
+        
+        # For paper trading mode
+        if self.paper_trading:
+            self.base_url = "https://api-sandbox.schwabapi.com/v1"
+            
+        logger.info(f"Initialized Charles Schwab API connector with paper trading: {self.paper_trading}")
     
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""
@@ -87,6 +107,13 @@ class APIConnector:
                     return False
             elif self.provider == 'td_ameritrade':
                 response = self.session.get(f"{self.base_url}/userprincipals")
+                if response.status_code == 200:
+                    return True
+                else:
+                    logger.warning(f"API connection failed with status code {response.status_code}: {response.text}")
+                    return False
+            elif self.provider == 'schwab':
+                response = self.session.get(f"{self.base_url}/accounts")
                 if response.status_code == 200:
                     return True
                 else:
@@ -168,6 +195,43 @@ class APIConnector:
                         'account_type': account.get('securitiesAccount', {}).get('type', 'Unknown'),
                         'status': 'ACTIVE',  # TD Ameritrade doesn't provide this directly
                         'is_pdt': False,  # Would need to determine this
+                        'api_status': 'Connected'
+                    }
+                else:
+                    logger.error(f"Failed to get account info: {response.text}")
+                    return {
+                        'equity': '0.00',
+                        'cash': '0.00',
+                        'buying_power': '0.00',
+                        'daily_pl_percentage': '0.00',
+                        'margin_percentage': 0,
+                        'open_positions': 0,
+                        'premium_collected': '0.00',
+                        'account_type': 'Unknown',
+                        'status': 'Unknown',
+                        'is_pdt': False,
+                        'api_status': 'Error'
+                    }
+            elif self.provider == 'schwab':
+                response = self.session.get(f"{self.base_url}/accounts")
+                if response.status_code == 200:
+                    data = response.json()
+                    # Process Schwab data - note that this is a simplified version
+                    # based on expected API structure, which may need adjustment
+                    account = data.get('accounts', [])[0] if data.get('accounts', []) else {}
+                    balance = account.get('balance', {})
+                    
+                    return {
+                        'equity': str(balance.get('equityValue', '0.00')),
+                        'cash': str(balance.get('cashBalance', '0.00')),
+                        'buying_power': str(balance.get('marginBuyingPower', '0.00')),
+                        'daily_pl_percentage': str(balance.get('dailyProfitLossPercentage', '0.00')),
+                        'margin_percentage': int(float(balance.get('marginUsed', '0')) / float(balance.get('equityValue', '1')) * 100) if float(balance.get('equityValue', '0')) > 0 else 0,
+                        'open_positions': account.get('openPositionsCount', 0),
+                        'premium_collected': str(account.get('optionsPremiumCollected', '0.00')),
+                        'account_type': account.get('type', 'Unknown'),
+                        'status': account.get('status', 'ACTIVE'),
+                        'is_pdt': account.get('isPatternDayTrader', False),
                         'api_status': 'Connected'
                     }
                 else:

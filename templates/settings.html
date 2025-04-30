@@ -30,6 +30,7 @@
                                 <select class="form-select" id="api_provider" name="api_provider">
                                     <option value="alpaca" {% if settings.api_provider == 'alpaca' %}selected{% endif %}>Alpaca</option>
                                     <option value="td_ameritrade" {% if settings.api_provider == 'td_ameritrade' %}selected{% endif %}>TD Ameritrade</option>
+                                    <option value="schwab" {% if settings.api_provider == 'schwab' %}selected{% endif %}>Charles Schwab</option>
                                     <option value="interactive_brokers" {% if settings.api_provider == 'interactive_brokers' %}selected{% endif %}>Interactive Brokers</option>
                                 </select>
                                 <div class="form-text">Select your trading platform provider</div>
