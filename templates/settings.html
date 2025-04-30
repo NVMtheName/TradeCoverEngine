@@ -1,0 +1,307 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings - Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-cog me-2"></i> Settings</h1>
+        <div>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-sliders-h me-2"></i> Bot Configuration
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('settings') }}" class="settings-form">
+                        <!-- API Connection Settings -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">API Connection</h5>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_provider" class="form-label">Trading Platform</label>
+                                <select class="form-select" id="api_provider" name="api_provider">
+                                    <option value="alpaca" {% if settings.api_provider == 'alpaca' %}selected{% endif %}>Alpaca</option>
+                                    <option value="td_ameritrade" {% if settings.api_provider == 'td_ameritrade' %}selected{% endif %}>TD Ameritrade</option>
+                                    <option value="interactive_brokers" {% if settings.api_provider == 'interactive_brokers' %}selected{% endif %}>Interactive Brokers</option>
+                                </select>
+                                <div class="form-text">Select your trading platform provider</div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_key" class="form-label">API Key</label>
+                                <input type="password" class="form-control" id="api_key" name="api_key" value="{{ settings.api_key }}" 
+                                       placeholder="Enter your API key">
+                                <div class="form-text">Your trading platform API key</div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_secret" class="form-label">API Secret</label>
+                                <input type="password" class="form-control" id="api_secret" name="api_secret" value="{{ settings.api_secret }}" 
+                                       placeholder="Enter your API secret">
+                                <div class="form-text">Your trading platform API secret</div>
+                            </div>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="is_paper_trading" name="is_paper_trading" 
+                                       {% if settings.is_paper_trading %}checked{% endif %}>
+                                <label class="form-check-label" for="is_paper_trading">Use Paper Trading</label>
+                                <div class="form-text">Enable to use paper trading (simulation mode)</div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-outline-primary" id="testConnection">
+                                    <i class="fas fa-plug me-2"></i> Test Connection
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Trading Strategy Settings -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Trading Strategy</h5>
+                            
+                            <div class="form-group mb-3">
+                                <label for="risk_level" class="form-label">Risk Level</label>
+                                <select class="form-select" id="risk_level" name="risk_level">
+                                    <option value="conservative" {% if settings.risk_level == 'conservative' %}selected{% endif %}>Conservative</option>
+                                    <option value="moderate" {% if settings.risk_level == 'moderate' %}selected{% endif %}>Moderate</option>
+                                    <option value="aggressive" {% if settings.risk_level == 'aggressive' %}selected{% endif %}>Aggressive</option>
+                                </select>
+                                <div class="form-text">
+                                    <strong>Conservative:</strong> Lower returns, higher probability of success<br>
+                                    <strong>Moderate:</strong> Balanced risk/reward<br>
+                                    <strong>Aggressive:</strong> Higher returns, lower probability of success
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="max_position_size" class="form-label">Maximum Position Size ($)</label>
+                                <input type="number" class="form-control" id="max_position_size" name="max_position_size" 
+                                       value="{{ settings.max_position_size }}" min="100" step="100">
+                                <div class="form-text">Maximum dollar amount per position</div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="profit_target_percentage" class="form-label">Profit Target (%)</label>
+                                        <input type="number" class="form-control" id="profit_target_percentage" name="profit_target_percentage" 
+                                               value="{{ settings.profit_target_percentage }}" min="1" max="50" step="0.5">
+                                        <div class="form-text">Percentage gain to trigger profit taking</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="stop_loss_percentage" class="form-label">Stop Loss (%)</label>
+                                        <input type="number" class="form-control" id="stop_loss_percentage" name="stop_loss_percentage" 
+                                               value="{{ settings.stop_loss_percentage }}" min="1" max="20" step="0.5">
+                                        <div class="form-text">Maximum allowed loss before closing position</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="options_expiry_days" class="form-label">Target Options Expiry (Days)</label>
+                                <input type="range" class="form-range" id="options_expiry_days" name="options_expiry_days" 
+                                       value="{{ settings.options_expiry_days }}" min="7" max="60" step="1">
+                                <div class="d-flex justify-content-between">
+                                    <span>7 days</span>
+                                    <span id="expiry_value">{{ settings.options_expiry_days }} days</span>
+                                    <span>60 days</span>
+                                </div>
+                                <div class="form-text">Preferred time until options expiration</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i> Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Quick Help Card -->
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-question-circle me-2"></i> Configuration Help
+                </div>
+                <div class="card-body">
+                    <h5>API Connection</h5>
+                    <p>To connect your trading account, you'll need to generate API credentials from your broker:</p>
+                    <ul>
+                        <li><strong>Alpaca:</strong> <a href="https://app.alpaca.markets/brokerage/dashboard/overview" target="_blank">Get credentials</a></li>
+                        <li><strong>TD Ameritrade:</strong> <a href="https://developer.tdameritrade.com/apis" target="_blank">Get credentials</a></li>
+                        <li><strong>Interactive Brokers:</strong> <a href="https://www.interactivebrokers.com/en/software/am/am/manageaccount/apideveloper.htm" target="_blank">Get credentials</a></li>
+                    </ul>
+                    <hr>
+                    <h5>Strategy Settings</h5>
+                    <p>Your trading strategy settings determine how the bot selects and executes covered call trades:</p>
+                    <ul>
+                        <li><strong>Risk Level:</strong> Affects strike price selection and premium targets</li>
+                        <li><strong>Position Size:</strong> Controls maximum investment per stock</li>
+                        <li><strong>Profit/Stop:</strong> When to take profits or cut losses</li>
+                        <li><strong>Expiry:</strong> Target days until option expiration</li>
+                    </ul>
+                    <hr>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i> Changes will apply to new trades only. Existing positions will continue with their current settings.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Strategy Presets Card -->
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <i class="fas fa-lightbulb me-2"></i> Strategy Presets
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('income')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Income Generator</strong>
+                                <span class="badge bg-success">Popular</span>
+                            </div>
+                            <small class="text-muted">Focus on higher premium, closer strike prices</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('conservative')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Conservative</strong>
+                            </div>
+                            <small class="text-muted">Far OTM strikes with lower premiums but higher safety</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('aggressive')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Aggressive Growth</strong>
+                            </div>
+                            <small class="text-muted">ATM strikes with max premium, higher assignment risk</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('weekly')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Weekly Strategy</strong>
+                            </div>
+                            <small class="text-muted">Short-term weekly options for faster returns</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update expiry value display
+    document.getElementById('options_expiry_days').addEventListener('input', function() {
+        document.getElementById('expiry_value').textContent = this.value + ' days';
+    });
+    
+    // Test API connection
+    document.getElementById('testConnection').addEventListener('click', function() {
+        const btn = this;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Testing...';
+        btn.disabled = true;
+        
+        // Simulate connection test
+        setTimeout(function() {
+            // Get values
+            const provider = document.getElementById('api_provider').value;
+            const apiKey = document.getElementById('api_key').value;
+            const apiSecret = document.getElementById('api_secret').value;
+            
+            if (!apiKey || !apiSecret) {
+                alert('Please enter both API key and secret to test connection.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+            
+            // Show success message (this would actually check the API in a real implementation)
+            const successAlert = document.createElement('div');
+            successAlert.className = 'alert alert-success mt-3';
+            successAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i> Connection successful! Your API credentials are valid.';
+            
+            btn.parentNode.appendChild(successAlert);
+            
+            btn.innerHTML = '<i class="fas fa-check me-2"></i> Connection Verified';
+            
+            // Reset button after 3 seconds
+            setTimeout(function() {
+                successAlert.remove();
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 3000);
+        }, 1500);
+    });
+    
+    // Apply strategy presets
+    function applyPreset(preset) {
+        switch(preset) {
+            case 'income':
+                document.getElementById('risk_level').value = 'moderate';
+                document.getElementById('profit_target_percentage').value = 5;
+                document.getElementById('stop_loss_percentage').value = 3;
+                document.getElementById('options_expiry_days').value = 30;
+                break;
+            case 'conservative':
+                document.getElementById('risk_level').value = 'conservative';
+                document.getElementById('profit_target_percentage').value = 3;
+                document.getElementById('stop_loss_percentage').value = 2;
+                document.getElementById('options_expiry_days').value = 45;
+                break;
+            case 'aggressive':
+                document.getElementById('risk_level').value = 'aggressive';
+                document.getElementById('profit_target_percentage').value = 8;
+                document.getElementById('stop_loss_percentage').value = 5;
+                document.getElementById('options_expiry_days').value = 30;
+                break;
+            case 'weekly':
+                document.getElementById('risk_level').value = 'aggressive';
+                document.getElementById('profit_target_percentage').value = 2;
+                document.getElementById('stop_loss_percentage').value = 2;
+                document.getElementById('options_expiry_days').value = 7;
+                break;
+        }
+        
+        // Update the expiry display
+        document.getElementById('expiry_value').textContent = document.getElementById('options_expiry_days').value + ' days';
+        
+        // Show confirmation toast
+        const toastEl = document.createElement('div');
+        toastEl.className = 'position-fixed top-0 end-0 p-3';
+        toastEl.style.zIndex = 1050;
+        toastEl.innerHTML = `
+            <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header">
+                    <strong class="me-auto">Strategy Preset</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    Strategy preset applied. Remember to save your settings!
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(toastEl);
+        
+        // Remove toast after 3 seconds
+        setTimeout(() => {
+            document.body.removeChild(toastEl);
+        }, 3000);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "layout.html" %}
+
+{% block title %}Trading Bot - Automated Covered Call Strategies{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container">
+        <h1 class="hero-title">Automated Covered Call Trading</h1>
+        <p class="hero-subtitle">Analyze stocks and execute covered call strategies with confidence</p>
+        <div class="mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-lg me-2">
+                <i class="fas fa-tachometer-alt me-2"></i> Go to Dashboard
+            </a>
+            <a href="{{ url_for('analysis') }}" class="btn btn-outline-light btn-lg">
+                <i class="fas fa-search-dollar me-2"></i> Analyze Stocks
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Main features section -->
+    <section class="mb-5">
+        <h2 class="text-center mb-4">Key Features</h2>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h5 class="card-title">Automated Analysis</h5>
+                        <p class="card-text">Scan and analyze stocks to identify profitable covered call opportunities based on technical indicators and options data.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h5 class="card-title">Strategy Optimization</h5>
+                        <p class="card-text">Optimize your covered call strategies with customizable risk levels, profit targets, and expiration dates.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <h5 class="card-title">Seamless Execution</h5>
+                        <p class="card-text">Execute trades automatically through your existing brokerage account with proper risk management.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it works section -->
+    <section class="mb-5">
+        <h2 class="text-center mb-4">How It Works</h2>
+        <div class="row align-items-center mb-5">
+            <div class="col-md-6">
+                <h3>1. Connect Your Trading Account</h3>
+                <p>Link your existing brokerage account through secure API connections. We support major platforms including Alpaca, TD Ameritrade, and more.</p>
+                <p>Set your risk parameters and trading preferences in the settings panel to align with your investment goals.</p>
+                <a href="{{ url_for('settings') }}" class="btn btn-primary">
+                    <i class="fas fa-plug me-2"></i> Connect Account
+                </a>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-dark">
+                    <div class="card-body">
+                        <div class="text-center p-4">
+                            <i class="fas fa-link fa-5x text-primary mb-3"></i>
+                            <h5>Secure API Connection</h5>
+                            <p class="text-muted">Your credentials are securely stored and never shared</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row align-items-center mb-5">
+            <div class="col-md-6 order-md-2">
+                <h3>2. Analyze Stock Opportunities</h3>
+                <p>Our algorithm scans the market for stocks that meet your criteria and show strong technical indicators for covered call strategies.</p>
+                <p>View detailed analysis including implied volatility, potential returns, and recommended strike prices for each opportunity.</p>
+                <a href="{{ url_for('analysis') }}" class="btn btn-primary">
+                    <i class="fas fa-search-dollar me-2"></i> Analyze Stocks
+                </a>
+            </div>
+            <div class="col-md-6 order-md-1">
+                <div class="card bg-dark">
+                    <div class="card-body">
+                        <div class="text-center p-4">
+                            <i class="fas fa-analytics fa-5x text-primary mb-3"></i>
+                            <h5>Smart Stock Analysis</h5>
+                            <p class="text-muted">Technical indicators and options metrics</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h3>3. Execute Covered Call Trades</h3>
+                <p>Execute trades with a single click or enable fully automated trading based on your predefined criteria.</p>
+                <p>Monitor your open positions, track performance, and receive notifications for important events like expiration dates or profit targets.</p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-tachometer-alt me-2"></i> View Dashboard
+                </a>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-dark">
+                    <div class="card-body">
+                        <div class="text-center p-4">
+                            <i class="fas fa-hand-holding-usd fa-5x text-primary mb-3"></i>
+                            <h5>Smart Execution</h5>
+                            <p class="text-muted">Maximize premium income with optimal timing</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="text-center mb-5 p-5 bg-dark rounded">
+        <h2>Ready to get started?</h2>
+        <p class="lead">Set up your trading bot in minutes and start generating income with covered calls</p>
+        <div class="mt-4">
+            <a href="{{ url_for('settings') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-rocket me-2"></i> Set Up Your Bot
+            </a>
+        </div>
+    </section>
+</div>
+{% endblock %}

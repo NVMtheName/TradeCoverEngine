@@ -1,0 +1,562 @@
+{% extends "layout.html" %}
+
+{% block title %}Stock Analysis - Trading Bot{% endblock %}
+
+{% block extra_css %}
+<style>
+    .opportunity-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+    }
+    .indicator-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    .recommendation-card {
+        border-left-width: 5px;
+    }
+    .recommendation-buy {
+        border-left-color: #28a745;
+    }
+    .recommendation-hold {
+        border-left-color: #ffc107;
+    }
+    .recommendation-neutral {
+        border-left-color: #6c757d;
+    }
+    .call-option-row {
+        transition: all 0.2s ease;
+    }
+    .call-option-row:hover {
+        background-color: rgba(13, 110, 253, 0.05);
+    }
+    .call-option-row.selected {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-search-dollar me-2"></i> Stock Analysis</h1>
+        <div>
+            <button class="btn btn-outline-secondary me-2" id="refreshAnalysis">
+                <i class="fas fa-sync-alt me-1"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Watchlist & Add Symbols -->
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-star me-2"></i> Watchlist
+                    <span class="badge bg-primary ms-1">{{ watchlist|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="p-3">
+                        <form method="POST" action="{{ url_for('add_to_watchlist') }}" class="d-flex">
+                            <input type="text" class="form-control me-2" name="symbol" placeholder="Enter symbol (e.g., AAPL)" required>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </form>
+                    </div>
+                    
+                    {% if watchlist %}
+                        <div class="list-group list-group-flush border-top">
+                            {% for item in watchlist %}
+                                <div class="watchlist-item">
+                                    <div>
+                                        <strong>{{ item.symbol }}</strong>
+                                        {% if item.notes %}
+                                            <i class="fas fa-info-circle text-info ms-1" data-bs-toggle="tooltip" title="{{ item.notes }}"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary me-1 analyze-btn" data-symbol="{{ item.symbol }}">
+                                            <i class="fas fa-chart-line"></i>
+                                        </button>
+                                        <form method="POST" action="{{ url_for('remove_from_watchlist', symbol=item.symbol) }}" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove {{ item.symbol }} from watchlist?')">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center p-4">
+                            <i class="fas fa-star fa-2x text-muted mb-3"></i>
+                            <p>Your watchlist is empty</p>
+                            <p class="text-muted small">Add symbols above to track potential opportunities</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-lightbulb me-2"></i> Coverage Tips
+                </div>
+                <div class="card-body">
+                    <h6>Best Stocks for Covered Calls</h6>
+                    <ul class="mb-3">
+                        <li>Mid to high volatility stocks</li>
+                        <li>Stocks you're comfortable holding long-term</li>
+                        <li>Companies with stable fundamentals</li>
+                        <li>Stocks trading above $20 (typically)</li>
+                    </ul>
+                    
+                    <h6>Selection Criteria</h6>
+                    <div class="alert alert-info p-2 small">
+                        <i class="fas fa-info-circle me-1"></i> The bot analyzes technical indicators, volatility, and options premium to find the best opportunities.
+                    </div>
+                    
+                    <h6>Popular Covered Call Stocks</h6>
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        <span class="badge bg-secondary">AAPL</span>
+                        <span class="badge bg-secondary">AMD</span>
+                        <span class="badge bg-secondary">MSFT</span>
+                        <span class="badge bg-secondary">F</span>
+                        <span class="badge bg-secondary">BAC</span>
+                        <span class="badge bg-secondary">T</span>
+                        <span class="badge bg-secondary">INTC</span>
+                        <span class="badge bg-secondary">PFE</span>
+                        <span class="badge bg-secondary">XOM</span>
+                        <span class="badge bg-secondary">NIO</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Covered Call Opportunities -->
+        <div class="col-md-8">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-gem me-2"></i> Covered Call Opportunities
+                    <span class="badge bg-success ms-1">{{ opportunities|length }}</span>
+                </div>
+                <div class="card-body">
+                    {% if opportunities %}
+                        {% for opportunity in opportunities %}
+                            <div class="card opportunity-card mb-4">
+                                <div class="opportunity-badge">
+                                    <span class="badge bg-success badge-return">
+                                        {{ "%.2f"|format(opportunity.best_call.annualized_return) }}% Ann. Return
+                                    </span>
+                                </div>
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0">{{ opportunity.symbol }}</h5>
+                                        <span class="text-muted small">Current Price: ${{ "%.2f"|format(opportunity.current_price) }}</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}">
+                                        <i class="fas fa-chevron-down"></i> Details
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row align-items-center mb-3">
+                                        <div class="col-md-5">
+                                            <div class="recommendation-card card p-3 {{ 'recommendation-buy' if opportunity.recommendation.action == 'COVERED_CALL' else 'recommendation-neutral' }}">
+                                                <h6 class="card-title">Recommendation</h6>
+                                                <p class="mb-1"><strong>{{ opportunity.recommendation.action.replace('_', ' ') }}</strong></p>
+                                                <p class="card-text small">{{ opportunity.recommendation.reason }}</p>
+                                                
+                                                {% if opportunity.recommendation.action == 'COVERED_CALL' %}
+                                                    <div class="mt-2">
+                                                        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#executeTrade{{ loop.index }}">
+                                                            <i class="fas fa-check-circle me-1"></i> Execute Trade
+                                                        </button>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-7">
+                                            <div class="row">
+                                                <div class="col-6 mb-3">
+                                                    <div class="card p-2 h-100">
+                                                        <div class="text-center">
+                                                            <h6 class="mb-1">Potential Return</h6>
+                                                            <div class="display-6 text-success">{{ "%.2f"|format(opportunity.best_call.potential_return) }}%</div>
+                                                            <small class="text-muted">Premium Yield</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6 mb-3">
+                                                    <div class="card p-2 h-100">
+                                                        <div class="text-center">
+                                                            <h6 class="mb-1">Annualized</h6>
+                                                            <div class="display-6 text-primary">{{ "%.2f"|format(opportunity.best_call.annualized_return) }}%</div>
+                                                            <small class="text-muted">{{ opportunity.best_call.days_to_expiry }} Days to Expiry</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="card p-2 h-100">
+                                                        <div class="text-center">
+                                                            <h6 class="mb-1">Strike Price</h6>
+                                                            <div class="h4">${{ "%.2f"|format(opportunity.best_call.strike) }}</div>
+                                                            <small class="text-muted">{{ ((opportunity.best_call.strike / opportunity.current_price - 1) * 100)|round(2) }}% from current</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="card p-2 h-100">
+                                                        <div class="text-center">
+                                                            <h6 class="mb-1">Premium</h6>
+                                                            <div class="h4">${{ "%.2f"|format(opportunity.best_call.premium) }}</div>
+                                                            <small class="text-muted">Per contract (100 shares)</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="collapse" id="collapse{{ loop.index }}">
+                                        <hr>
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <h6 class="border-bottom pb-2 mb-3">Technical Indicators</h6>
+                                                <div class="indicator-grid">
+                                                    <div class="card p-2 text-center">
+                                                        <h6 class="small mb-1">Volatility</h6>
+                                                        <div class="h5 mb-0 {{ 'text-success' if opportunity.technical_indicators.volatility < 30 else 'text-warning' if opportunity.technical_indicators.volatility < 50 else 'text-danger' }}">
+                                                            {{ "%.2f"|format(opportunity.technical_indicators.volatility) }}%
+                                                        </div>
+                                                    </div>
+                                                    <div class="card p-2 text-center">
+                                                        <h6 class="small mb-1">RSI</h6>
+                                                        <div class="h5 mb-0 {{ 'text-warning' if opportunity.technical_indicators.rsi < 30 else 'text-danger' if opportunity.technical_indicators.rsi > 70 else 'text-success' }}">
+                                                            {{ "%.1f"|format(opportunity.technical_indicators.rsi) }}
+                                                        </div>
+                                                    </div>
+                                                    <div class="card p-2 text-center">
+                                                        <h6 class="small mb-1">MACD</h6>
+                                                        <div class="h5 mb-0 {{ 'text-success' if opportunity.technical_indicators.macd > opportunity.technical_indicators.macd_signal else 'text-danger' }}">
+                                                            {{ "%.2f"|format(opportunity.technical_indicators.macd) }}
+                                                        </div>
+                                                    </div>
+                                                    <div class="card p-2 text-center">
+                                                        <h6 class="small mb-1">SMA 20/50</h6>
+                                                        <div class="h5 mb-0 {{ 'text-success' if opportunity.technical_indicators.sma_20 > opportunity.technical_indicators.sma_50 else 'text-danger' }}">
+                                                            {{ "%.2f"|format(opportunity.technical_indicators.sma_20 / opportunity.technical_indicators.sma_50 * 100) }}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mt-3">
+                                                    <div class="mini-chart-container">
+                                                        <canvas id="rsiGauge{{ loop.index }}" data-rsi-value="{{ opportunity.technical_indicators.rsi }}"></canvas>
+                                                        <div class="gauge-label oversold">Oversold</div>
+                                                        <div class="gauge-label neutral">Neutral</div>
+                                                        <div class="gauge-label overbought">Overbought</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-8">
+                                                <h6 class="border-bottom pb-2 mb-3">Price Chart</h6>
+                                                <div class="chart-container">
+                                                    <canvas id="stockChart{{ loop.index }}" data-chart-symbol="{{ opportunity.symbol }}"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-4">
+                                            <h6 class="border-bottom pb-2 mb-3">Call Options</h6>
+                                            <div class="table-responsive">
+                                                <table class="table table-hover options-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Strike</th>
+                                                            <th>Premium</th>
+                                                            <th>Expiry</th>
+                                                            <th>% Return</th>
+                                                            <th>Ann. Return</th>
+                                                            <th>Delta</th>
+                                                            <th>IV</th>
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for call in opportunity.call_recommendations %}
+                                                            <tr class="call-option-row {{ 'recommended' if loop.index == 1 }}">
+                                                                <td><strong>${{ "%.2f"|format(call.strike) }}</strong></td>
+                                                                <td>${{ "%.2f"|format(call.premium) }}</td>
+                                                                <td>{{ call.days_to_expiry }} days</td>
+                                                                <td>{{ "%.2f"|format(call.potential_return) }}%</td>
+                                                                <td>{{ "%.2f"|format(call.annualized_return) }}%</td>
+                                                                <td>{{ call.delta }}</td>
+                                                                <td>{{ call.iv }}</td>
+                                                                <td>
+                                                                    <button class="btn btn-sm btn-outline-primary select-option-btn" 
+                                                                            data-strike="{{ call.strike }}" 
+                                                                            data-premium="{{ call.premium }}" 
+                                                                            data-expiry="{{ call.days_to_expiry }}"
+                                                                            data-target="#executeTrade{{ loop.parent.index }}">
+                                                                        Select
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-4">
+                                            <h6 class="border-bottom pb-2 mb-3">Potential Returns</h6>
+                                            <div class="chart-container">
+                                                <canvas id="returnsChart{{ loop.index }}" data-returns-chart='{{ [
+                                                    {"name": "Premium Only", "annualReturn": opportunity.best_call.potential_return * (365 / opportunity.best_call.days_to_expiry)}, 
+                                                    {"name": "If Assigned", "annualReturn": opportunity.best_call.annualized_return},
+                                                    {"name": "Stock Only", "annualReturn": ((opportunity.best_call.strike / opportunity.current_price - 1) * 100 * (365 / opportunity.best_call.days_to_expiry))},
+                                                    {"name": "Buy & Hold Avg", "annualReturn": 10}
+                                                ] | tojson }}'></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Execute Trade Modal for this opportunity -->
+                            <div class="modal fade" id="executeTrade{{ loop.index }}" tabindex="-1" aria-labelledby="executeTradeLabel{{ loop.index }}" aria-hidden="true">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="executeTradeLabel{{ loop.index }}">Execute Covered Call for {{ opportunity.symbol }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('execute_covered_call') }}">
+                                            <div class="modal-body">
+                                                <div class="alert alert-info">
+                                                    <i class="fas fa-info-circle me-2"></i> You are about to execute a covered call strategy for {{ opportunity.symbol }}. This will buy 100 shares and sell 1 call option.
+                                                </div>
+                                                
+                                                <input type="hidden" name="symbol" value="{{ opportunity.symbol }}">
+                                                
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
+                                                        <label for="quantity{{ loop.index }}" class="form-label">Quantity (in shares)</label>
+                                                        <select class="form-select" id="quantity{{ loop.index }}" name="quantity">
+                                                            <option value="100">100 (1 contract)</option>
+                                                            <option value="200">200 (2 contracts)</option>
+                                                            <option value="300">300 (3 contracts)</option>
+                                                            <option value="400">400 (4 contracts)</option>
+                                                            <option value="500">500 (5 contracts)</option>
+                                                        </select>
+                                                        <div class="form-text">Each option contract represents 100 shares</div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="strike_price{{ loop.index }}" class="form-label">Strike Price</label>
+                                                        <input type="number" class="form-control" id="strike_price{{ loop.index }}" name="strike_price" value="{{ opportunity.best_call.strike }}" step="0.01" required>
+                                                        <div class="form-text">The strike price for the call option</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
+                                                        <label for="expiry_date{{ loop.index }}" class="form-label">Expiration Date</label>
+                                                        <input type="date" class="form-control" id="expiry_date{{ loop.index }}" name="expiry_date" required>
+                                                        <div class="form-text">The expiration date for the call option</div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="estimated_premium{{ loop.index }}" class="form-label">Estimated Premium</label>
+                                                        <div class="input-group">
+                                                            <span class="input-group-text">$</span>
+                                                            <input type="text" class="form-control" id="estimated_premium{{ loop.index }}" value="{{ opportunity.best_call.premium }}" readonly>
+                                                        </div>
+                                                        <div class="form-text">Premium per contract (100 shares)</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <div class="card bg-light p-3">
+                                                            <h6>Trade Summary</h6>
+                                                            <dl class="row mb-0">
+                                                                <dt class="col-sm-7">Stock Purchase:</dt>
+                                                                <dd class="col-sm-5">$<span id="stockCost{{ loop.index }}">{{ "%.2f"|format(opportunity.current_price * 100) }}</span></dd>
+                                                                
+                                                                <dt class="col-sm-7">Premium Received:</dt>
+                                                                <dd class="col-sm-5 text-success">$<span id="premiumReceived{{ loop.index }}">{{ "%.2f"|format(opportunity.best_call.premium * 100) }}</span></dd>
+                                                                
+                                                                <dt class="col-sm-7">Net Investment:</dt>
+                                                                <dd class="col-sm-5">$<span id="netInvestment{{ loop.index }}">{{ "%.2f"|format(opportunity.current_price * 100 - opportunity.best_call.premium * 100) }}</span></dd>
+                                                                
+                                                                <dt class="col-sm-7">Return If Assigned:</dt>
+                                                                <dd class="col-sm-5 text-primary"><span id="returnPct{{ loop.index }}">{{ "%.2f"|format(opportunity.best_call.potential_total_return) }}</span>%</dd>
+                                                            </dl>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="card bg-light p-3">
+                                                            <h6>Potential Outcomes</h6>
+                                                            <div class="mb-2">
+                                                                <div class="d-flex justify-content-between align-items-center small">
+                                                                    <strong>If stock stays below ${{ "%.2f"|format(opportunity.best_call.strike) }}:</strong>
+                                                                    <span class="badge bg-success">Keep premium</span>
+                                                                </div>
+                                                                <div class="small text-muted">Option expires worthless, keep stock and premium</div>
+                                                            </div>
+                                                            <div>
+                                                                <div class="d-flex justify-content-between align-items-center small">
+                                                                    <strong>If stock rises above ${{ "%.2f"|format(opportunity.best_call.strike) }}:</strong>
+                                                                    <span class="badge bg-primary">Assignment</span>
+                                                                </div>
+                                                                <div class="small text-muted">Stock gets called away at strike price, keep premium</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="fas fa-check-circle me-1"></i> Execute Trade
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center p-5">
+                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                            <h5>No Opportunities Found</h5>
+                            <p class="text-muted">Add more stocks to your watchlist or adjust your strategy settings.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Refresh button
+        document.getElementById('refreshAnalysis').addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Refreshing...';
+            this.disabled = true;
+            
+            // Refresh the page
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+        
+        // Set expiry dates in modals to 30 days from now
+        const today = new Date();
+        const thirtyDaysLater = new Date();
+        thirtyDaysLater.setDate(today.getDate() + 30);
+        
+        // Format date as YYYY-MM-DD for input elements
+        const formattedDate = thirtyDaysLater.toISOString().split('T')[0];
+        
+        document.querySelectorAll('input[name="expiry_date"]').forEach(input => {
+            input.value = formattedDate;
+        });
+        
+        // Update trade summary when quantity changes
+        document.querySelectorAll('select[id^="quantity"]').forEach(select => {
+            select.addEventListener('change', function() {
+                const modalIndex = this.id.replace('quantity', '');
+                updateTradeSummary(modalIndex);
+            });
+        });
+        
+        // Update trade summary when strike price changes
+        document.querySelectorAll('input[id^="strike_price"]').forEach(input => {
+            input.addEventListener('input', function() {
+                const modalIndex = this.id.replace('strike_price', '');
+                updateTradeSummary(modalIndex);
+            });
+        });
+        
+        // Select option button functionality
+        document.querySelectorAll('.select-option-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const strike = this.getAttribute('data-strike');
+                const premium = this.getAttribute('data-premium');
+                const expiry = this.getAttribute('data-expiry');
+                const targetModalId = this.getAttribute('data-target');
+                
+                // Update the modal with selected option data
+                const modalIndex = targetModalId.replace('#executeTrade', '');
+                document.getElementById(`strike_price${modalIndex}`).value = strike;
+                document.getElementById(`estimated_premium${modalIndex}`).textContent = premium;
+                
+                // Calculate expiry date based on days
+                const expiryDate = new Date();
+                expiryDate.setDate(expiryDate.getDate() + parseInt(expiry));
+                document.getElementById(`expiry_date${modalIndex}`).value = expiryDate.toISOString().split('T')[0];
+                
+                // Update trade summary
+                updateTradeSummary(modalIndex);
+                
+                // Show the modal
+                const modal = new bootstrap.Modal(document.querySelector(targetModalId));
+                modal.show();
+                
+                // Highlight the selected row
+                document.querySelectorAll('.call-option-row').forEach(row => {
+                    row.classList.remove('selected');
+                });
+                this.closest('tr').classList.add('selected');
+            });
+        });
+        
+        // Function to update trade summary in modal
+        function updateTradeSummary(modalIndex) {
+            const quantity = parseInt(document.getElementById(`quantity${modalIndex}`).value);
+            const currentPrice = parseFloat(document.getElementById(`stockCost${modalIndex}`).textContent) / 100;
+            const premium = parseFloat(document.getElementById(`estimated_premium${modalIndex}`).textContent);
+            const strikePrice = parseFloat(document.getElementById(`strike_price${modalIndex}`).value);
+            
+            // Update stock cost
+            const stockCost = currentPrice * quantity;
+            document.getElementById(`stockCost${modalIndex}`).textContent = stockCost.toFixed(2);
+            
+            // Update premium received
+            const premiumReceived = premium * (quantity / 100);
+            document.getElementById(`premiumReceived${modalIndex}`).textContent = premiumReceived.toFixed(2);
+            
+            // Update net investment
+            const netInvestment = stockCost - premiumReceived;
+            document.getElementById(`netInvestment${modalIndex}`).textContent = netInvestment.toFixed(2);
+            
+            // Update return percentage
+            const potentialReturn = ((strikePrice - currentPrice + premium) / currentPrice * 100);
+            document.getElementById(`returnPct${modalIndex}`).textContent = potentialReturn.toFixed(2);
+        }
+        
+        // Initialize analyze buttons
+        document.querySelectorAll('.analyze-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const symbol = this.getAttribute('data-symbol');
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                this.disabled = true;
+                
+                // In a real implementation, this would trigger an analysis
+                // For now, just reload the page
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            });
+        });
+    });
+</script>
+{% endblock %}

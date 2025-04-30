@@ -1,0 +1,327 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard - Trading Bot{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kpi-card {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    .kpi-label {
+        font-size: 1rem;
+        color: #6c757d;
+    }
+    .position-card {
+        transition: all 0.2s ease;
+    }
+    .position-card:hover {
+        transform: translateY(-3px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-tachometer-alt me-2"></i> Dashboard</h1>
+        <div>
+            <button class="btn btn-outline-secondary" id="refreshDashboard">
+                <i class="fas fa-sync-alt me-1"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Account Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-primary">
+                        ${{ account_info.get('equity', '0.00') }}
+                    </div>
+                    <div class="kpi-label">Account Value</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value {% if account_info.get('daily_pl_percentage', 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ account_info.get('daily_pl_percentage', '0.00') }}%
+                    </div>
+                    <div class="kpi-label">Today's P/L</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-info">
+                        {{ account_info.get('open_positions', 0) }}
+                    </div>
+                    <div class="kpi-label">Open Positions</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-warning">
+                        ${{ account_info.get('premium_collected', '0.00') }}
+                    </div>
+                    <div class="kpi-label">Premium Collected</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Portfolio Performance -->
+        <div class="col-md-8">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    Portfolio Performance
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="timeframeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            30 Days
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="timeframeDropdown">
+                            <li><a class="dropdown-item active" href="#">30 Days</a></li>
+                            <li><a class="dropdown-item" href="#">90 Days</a></li>
+                            <li><a class="dropdown-item" href="#">1 Year</a></li>
+                            <li><a class="dropdown-item" href="#">All Time</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="equityChart" data-equity='{{ performance_data.get("equity_history", {"dates": [], "equity": []}) | tojson }}'></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    Monthly Returns
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="monthlyReturnsChart" data-returns='{{ performance_data.get("monthly_returns", {"months": [], "returns": []}) | tojson }}'></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Details and Recent Trades -->
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    Account Details
+                    <button class="btn btn-sm btn-link text-decoration-none" id="accountDetailsToggle">Show Details</button>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Cash Balance</span>
+                            <span class="fw-bold">${{ account_info.get('cash', '0.00') }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Buying Power</span>
+                            <span class="fw-bold">${{ account_info.get('buying_power', '0.00') }}</span>
+                        </li>
+                    </ul>
+                    
+                    <div id="accountDetailsSection" style="display: none;">
+                        <hr>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Account Type</span>
+                                <span>{{ account_info.get('account_type', 'Margin') }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Trading Status</span>
+                                <span class="badge bg-success">{{ account_info.get('status', 'Active') }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Pattern Day Trader</span>
+                                <span>{{ 'Yes' if account_info.get('is_pdt', False) else 'No' }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Margin Utilization</span>
+                                <div class="progress" style="width: 60%;">
+                                    <div class="progress-bar" role="progressbar" style="width: {{ account_info.get('margin_percentage', 0) }}%;" 
+                                         aria-valuenow="{{ account_info.get('margin_percentage', 0) }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ account_info.get('margin_percentage', 0) }}%
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    Recent Trades
+                    <a href="{{ url_for('trades') }}" class="btn btn-sm btn-link text-decoration-none">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_trades %}
+                        <div class="list-group list-group-flush">
+                            {% for trade in recent_trades %}
+                                <div class="list-group-item trade-item {% if trade.trade_type == 'BUY_STOCK' %}trade-buy{% elif trade.trade_type == 'SELL_STOCK' %}trade-sell{% else %}trade-call{% endif %}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ trade.symbol }}</strong>
+                                            <span class="badge {% if trade.trade_type == 'COVERED_CALL' %}bg-info{% elif 'BUY' in trade.trade_type %}bg-success{% else %}bg-danger{% endif %} ms-1">
+                                                {{ trade.trade_type.replace('_', ' ') }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="text-muted small">{{ trade.timestamp.strftime('%m/%d %H:%M') }}</span>
+                                            <button class="trade-detail-btn" data-trade-id="{{ trade.id }}">
+                                                <i class="fas fa-chevron-down"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="tradeDetail{{ trade.id }}" class="mt-2 d-none">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="small text-muted">Quantity</div>
+                                                <div>{{ trade.quantity }}</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="small text-muted">Price</div>
+                                                <div>${{ trade.price }}</div>
+                                            </div>
+                                        </div>
+                                        {% if trade.option_strike %}
+                                            <div class="row mt-2">
+                                                <div class="col-6">
+                                                    <div class="small text-muted">Strike</div>
+                                                    <div>${{ trade.option_strike }}</div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="small text-muted">Expiry</div>
+                                                    <div>{{ trade.option_expiry }}</div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                        <div class="mt-2">
+                                            <div class="small text-muted">Status</div>
+                                            <div>
+                                                <span class="badge {% if trade.status == 'OPEN' %}bg-primary{% elif trade.status == 'CLOSED' %}bg-success{% elif trade.status == 'EXPIRED' %}bg-secondary{% else %}bg-warning{% endif %}">
+                                                    {{ trade.status }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center p-4">
+                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                            <p>No recent trades to display</p>
+                            <a href="{{ url_for('analysis') }}" class="btn btn-sm btn-primary">Find Opportunities</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="card dashboard-card mt-4">
+        <div class="card-header">
+            Open Positions
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="tooltip" title="Refresh positions data">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            {% if open_positions %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Quantity</th>
+                                <th>Avg Entry</th>
+                                <th>Current Price</th>
+                                <th>Market Value</th>
+                                <th>Unrealized P/L</th>
+                                <th>P/L %</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for position in open_positions %}
+                                <tr class="position-item" data-pl-percent="{{ position.unrealized_plpc }}">
+                                    <td><strong>{{ position.symbol }}</strong></td>
+                                    <td>{{ position.quantity }}</td>
+                                    <td>${{ "%.2f"|format(position.avg_entry_price) }}</td>
+                                    <td>${{ "%.2f"|format(position.current_price) }}</td>
+                                    <td>${{ "%.2f"|format(position.market_value) }}</td>
+                                    <td class="{% if position.unrealized_pl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        ${{ "%.2f"|format(position.unrealized_pl) }}
+                                    </td>
+                                    <td class="{% if position.unrealized_plpc >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ "%.2f"|format(position.unrealized_plpc) }}%
+                                    </td>
+                                    <td>
+                                        <span class="position-status" title="Loading status..."></span>
+                                    </td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                Actions
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-chart-line me-2"></i> View Details</a></li>
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-edit me-2"></i> Edit Parameters</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" href="#"><i class="fas fa-times-circle me-2"></i> Close Position</a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center p-5">
+                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                    <h5>No Open Positions</h5>
+                    <p class="text-muted">You don't have any open positions at the moment.</p>
+                    <a href="{{ url_for('analysis') }}" class="btn btn-primary">
+                        <i class="fas fa-search-dollar me-2"></i> Find Trading Opportunities
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    document.getElementById('refreshDashboard').addEventListener('click', function() {
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Refreshing...';
+        this.disabled = true;
+        
+        // Simulate refresh
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    });
+</script>
+{% endblock %}

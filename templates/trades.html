@@ -1,0 +1,543 @@
+{% extends "layout.html" %}
+
+{% block title %}Trade History - Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-exchange-alt me-2"></i> Trade History</h1>
+        <div>
+            <button class="btn btn-outline-secondary" id="exportTrades">
+                <i class="fas fa-file-export me-1"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card dashboard-card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i> Filters
+        </div>
+        <div class="card-body">
+            <form id="tradeFilterForm" class="row g-3">
+                <div class="col-md-3">
+                    <label for="tradeType" class="form-label">Trade Type</label>
+                    <select class="form-select" id="tradeType">
+                        <option value="">All Types</option>
+                        <option value="COVERED_CALL">Covered Calls</option>
+                        <option value="BUY_STOCK">Buy Stock</option>
+                        <option value="SELL_STOCK">Sell Stock</option>
+                        <option value="BUY_TO_CLOSE">Buy to Close</option>
+                        <option value="ASSIGNED">Assigned</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="tradeStatus" class="form-label">Status</label>
+                    <select class="form-select" id="tradeStatus">
+                        <option value="">All Statuses</option>
+                        <option value="OPEN">Open</option>
+                        <option value="CLOSED">Closed</option>
+                        <option value="EXPIRED">Expired</option>
+                        <option value="ASSIGNED">Assigned</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="dateRange" class="form-label">Date Range</label>
+                    <select class="form-select" id="dateRange">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="365">Last Year</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="symbolFilter" class="form-label">Symbol</label>
+                    <input type="text" class="form-control" id="symbolFilter" placeholder="e.g., AAPL">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i> Apply Filters
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary ms-2" id="clearFilters">
+                        <i class="fas fa-times me-1"></i> Clear Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-primary" id="totalTradesStat">
+                        {{ trades|length }}
+                    </div>
+                    <div class="kpi-label">Total Trades</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-success" id="profitableTradesStat">
+                        {% set profitable_trades = trades|selectattr('profit_loss', 'ge', 0)|list %}
+                        {% if trades %}
+                            {{ (profitable_trades|length / trades|length * 100)|round(1) }}%
+                        {% else %}
+                            0%
+                        {% endif %}
+                    </div>
+                    <div class="kpi-label">Profitable Trades</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-info" id="premiumCollectedStat">
+                        {% set total_premium = 0 %}
+                        {% for trade in trades if trade.trade_type == 'COVERED_CALL' %}
+                            {% set total_premium = total_premium + (trade.price * trade.quantity / 100) %}
+                        {% endfor %}
+                        ${{ "%.2f"|format(total_premium) }}
+                    </div>
+                    <div class="kpi-label">Premium Collected</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="kpi-value text-warning" id="avgReturnStat">
+                        {% set total_return = 0 %}
+                        {% set closed_trades = trades|selectattr('status', 'eq', 'CLOSED')|list %}
+                        {% for trade in closed_trades if trade.profit_loss %}
+                            {% set total_return = total_return + trade.profit_loss %}
+                        {% endfor %}
+                        {% if closed_trades %}
+                            {{ (total_return / closed_trades|length)|round(2) }}%
+                        {% else %}
+                            0%
+                        {% endif %}
+                    </div>
+                    <div class="kpi-label">Avg. Return per Trade</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trade History Table -->
+    <div class="card dashboard-card">
+        <div class="card-header">
+            <i class="fas fa-history me-2"></i> Trade History
+            <span class="badge bg-primary ms-2" id="tradeCount">{{ trades|length }} trades</span>
+        </div>
+        <div class="card-body p-0">
+            {% if trades %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tradesTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Strike</th>
+                                <th>Expiry</th>
+                                <th>Status</th>
+                                <th>P/L</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trade in trades %}
+                                <tr class="trade-row" 
+                                    data-type="{{ trade.trade_type }}" 
+                                    data-status="{{ trade.status }}" 
+                                    data-symbol="{{ trade.symbol }}" 
+                                    data-date="{{ trade.timestamp.strftime('%Y-%m-%d') }}">
+                                    <td>{{ trade.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td><strong>{{ trade.symbol }}</strong></td>
+                                    <td>
+                                        <span class="badge {% if trade.trade_type == 'COVERED_CALL' %}bg-info
+                                                         {% elif trade.trade_type == 'BUY_STOCK' %}bg-success
+                                                         {% elif trade.trade_type == 'SELL_STOCK' %}bg-danger
+                                                         {% elif trade.trade_type == 'BUY_TO_CLOSE' %}bg-warning
+                                                         {% else %}bg-secondary{% endif %}">
+                                            {{ trade.trade_type.replace('_', ' ') }}
+                                        </span>
+                                    </td>
+                                    <td>{{ trade.quantity }}</td>
+                                    <td>${{ "%.2f"|format(trade.price) }}</td>
+                                    <td>{% if trade.option_strike %}${{ "%.2f"|format(trade.option_strike) }}{% else %}-{% endif %}</td>
+                                    <td>{% if trade.option_expiry %}{{ trade.option_expiry }}{% else %}-{% endif %}</td>
+                                    <td>
+                                        <span class="badge {% if trade.status == 'OPEN' %}bg-primary
+                                                         {% elif trade.status == 'CLOSED' %}bg-success
+                                                         {% elif trade.status == 'EXPIRED' %}bg-secondary
+                                                         {% elif trade.status == 'ASSIGNED' %}bg-warning
+                                                         {% else %}bg-light{% endif %}">
+                                            {{ trade.status }}
+                                        </span>
+                                    </td>
+                                    <td class="{% if trade.profit_loss and trade.profit_loss >= 0 %}text-success{% elif trade.profit_loss %}text-danger{% endif %}">
+                                        {% if trade.profit_loss %}
+                                            {{ "%.2f"|format(trade.profit_loss) }}%
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary view-trade-btn" data-trade-id="{{ trade.id }}">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center p-5">
+                    <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                    <h5>No Trade History</h5>
+                    <p class="text-muted">You haven't executed any trades yet.</p>
+                    <a href="{{ url_for('analysis') }}" class="btn btn-primary">
+                        <i class="fas fa-search-dollar me-2"></i> Find Trading Opportunities
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div>
+                <small class="text-muted">Showing <span id="visibleTrades">{{ trades|length }}</span> of {{ trades|length }} trades</small>
+            </div>
+            <div>
+                <nav aria-label="Trade history pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Previous</a>
+                        </li>
+                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                        <li class="page-item"><a class="page-link" href="#">2</a></li>
+                        <li class="page-item"><a class="page-link" href="#">3</a></li>
+                        <li class="page-item">
+                            <a class="page-link" href="#">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trade Details Modal -->
+    <div class="modal fade" id="tradeDetailsModal" tabindex="-1" aria-labelledby="tradeDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tradeDetailsModalLabel">Trade Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Trade Information</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Symbol:</th>
+                                    <td id="modalSymbol">AAPL</td>
+                                </tr>
+                                <tr>
+                                    <th>Type:</th>
+                                    <td id="modalType">COVERED CALL</td>
+                                </tr>
+                                <tr>
+                                    <th>Quantity:</th>
+                                    <td id="modalQuantity">100</td>
+                                </tr>
+                                <tr>
+                                    <th>Price:</th>
+                                    <td id="modalPrice">$145.23</td>
+                                </tr>
+                                <tr>
+                                    <th>Date:</th>
+                                    <td id="modalDate">2023-06-15 10:30:45</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td id="modalStatus">OPEN</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Option Details</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Strike Price:</th>
+                                    <td id="modalStrike">$150.00</td>
+                                </tr>
+                                <tr>
+                                    <th>Expiry Date:</th>
+                                    <td id="modalExpiry">2023-07-21</td>
+                                </tr>
+                                <tr>
+                                    <th>Premium:</th>
+                                    <td id="modalPremium">$3.45 ($345.00 total)</td>
+                                </tr>
+                                <tr>
+                                    <th>Return:</th>
+                                    <td id="modalReturn">2.38%</td>
+                                </tr>
+                                <tr>
+                                    <th>Annualized Return:</th>
+                                    <td id="modalAnnReturn">16.42%</td>
+                                </tr>
+                                <tr>
+                                    <th>Days to Expiry:</th>
+                                    <td id="modalDaysToExpiry">36</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <h6>Performance</h6>
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-success" id="modalProgressBar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Entry: $145.23</small>
+                            <small class="text-muted">Current: $148.75</small>
+                            <small class="text-muted">Target: $150.00</small>
+                        </div>
+                    </div>
+                    <div class="mt-4" id="modalNotes">
+                        <h6>Notes</h6>
+                        <p class="text-muted">No notes for this trade.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="viewAnalysisBtn">
+                        <i class="fas fa-chart-line me-1"></i> View Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Filter functionality
+        const filterForm = document.getElementById('tradeFilterForm');
+        const clearFiltersBtn = document.getElementById('clearFilters');
+        const tradeRows = document.querySelectorAll('.trade-row');
+        const visibleTradesEl = document.getElementById('visibleTrades');
+        const tradeCountEl = document.getElementById('tradeCount');
+        
+        filterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            applyFilters();
+        });
+        
+        clearFiltersBtn.addEventListener('click', function() {
+            document.getElementById('tradeType').value = '';
+            document.getElementById('tradeStatus').value = '';
+            document.getElementById('dateRange').value = '30';
+            document.getElementById('symbolFilter').value = '';
+            applyFilters();
+        });
+        
+        function applyFilters() {
+            const typeFilter = document.getElementById('tradeType').value;
+            const statusFilter = document.getElementById('tradeStatus').value;
+            const dateFilter = document.getElementById('dateRange').value;
+            const symbolFilter = document.getElementById('symbolFilter').value.toUpperCase();
+            
+            let visibleCount = 0;
+            
+            tradeRows.forEach(row => {
+                const rowType = row.dataset.type;
+                const rowStatus = row.dataset.status;
+                const rowSymbol = row.dataset.symbol;
+                const rowDate = new Date(row.dataset.date);
+                
+                // Date filter
+                let dateMatch = true;
+                if (dateFilter !== 'all') {
+                    const daysAgo = parseInt(dateFilter);
+                    const cutoffDate = new Date();
+                    cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+                    dateMatch = rowDate >= cutoffDate;
+                }
+                
+                // Check all filters
+                const typeMatch = !typeFilter || rowType === typeFilter;
+                const statusMatch = !statusFilter || rowStatus === statusFilter;
+                const symbolMatch = !symbolFilter || rowSymbol.includes(symbolFilter);
+                
+                if (typeMatch && statusMatch && dateMatch && symbolMatch) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Update visible count
+            visibleTradesEl.textContent = visibleCount;
+            tradeCountEl.textContent = `${visibleCount} trades`;
+            
+            // Update statistics based on visible trades
+            updateStatistics();
+        }
+        
+        function updateStatistics() {
+            // Count visible trades
+            const visibleRows = Array.from(tradeRows).filter(row => row.style.display !== 'none');
+            
+            // Calculate stats based on visible trades
+            const totalTrades = visibleRows.length;
+            document.getElementById('totalTradesStat').textContent = totalTrades;
+            
+            if (totalTrades > 0) {
+                // Profitable trades percentage
+                const profitableTrades = visibleRows.filter(row => {
+                    const cell = row.querySelector('td:nth-child(9)'); // P/L column
+                    return cell.textContent.trim() !== '-' && !cell.classList.contains('text-danger');
+                }).length;
+                const profitablePercentage = (profitableTrades / totalTrades * 100).toFixed(1);
+                document.getElementById('profitableTradesStat').textContent = profitablePercentage + '%';
+                
+                // Premium collected
+                const coveredCallRows = visibleRows.filter(row => row.dataset.type === 'COVERED_CALL');
+                let totalPremium = 0;
+                coveredCallRows.forEach(row => {
+                    const price = parseFloat(row.querySelector('td:nth-child(5)').textContent.replace('$', ''));
+                    const quantity = parseInt(row.querySelector('td:nth-child(4)').textContent);
+                    totalPremium += (price * quantity / 100); // Divide by 100 for option contracts
+                });
+                document.getElementById('premiumCollectedStat').textContent = '$' + totalPremium.toFixed(2);
+                
+                // Average return
+                const closedTrades = visibleRows.filter(row => row.dataset.status === 'CLOSED');
+                if (closedTrades.length > 0) {
+                    let totalReturn = 0;
+                    let countWithReturn = 0;
+                    
+                    closedTrades.forEach(row => {
+                        const plCell = row.querySelector('td:nth-child(9)');
+                        if (plCell.textContent.trim() !== '-') {
+                            totalReturn += parseFloat(plCell.textContent.trim());
+                            countWithReturn++;
+                        }
+                    });
+                    
+                    if (countWithReturn > 0) {
+                        const avgReturn = (totalReturn / countWithReturn).toFixed(2);
+                        document.getElementById('avgReturnStat').textContent = avgReturn + '%';
+                    } else {
+                        document.getElementById('avgReturnStat').textContent = '0%';
+                    }
+                } else {
+                    document.getElementById('avgReturnStat').textContent = '0%';
+                }
+            } else {
+                // No trades visible
+                document.getElementById('profitableTradesStat').textContent = '0%';
+                document.getElementById('premiumCollectedStat').textContent = '$0.00';
+                document.getElementById('avgReturnStat').textContent = '0%';
+            }
+        }
+        
+        // Export functionality
+        document.getElementById('exportTrades').addEventListener('click', function() {
+            alert('Export functionality would download a CSV file of your trade history.');
+        });
+        
+        // Trade details modal
+        const tradeDetailsModal = new bootstrap.Modal(document.getElementById('tradeDetailsModal'));
+        const viewTradeBtns = document.querySelectorAll('.view-trade-btn');
+        
+        viewTradeBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tradeId = this.getAttribute('data-trade-id');
+                const row = this.closest('tr');
+                
+                // Populate modal with data from the row
+                document.getElementById('modalSymbol').textContent = row.querySelector('td:nth-child(2)').textContent;
+                document.getElementById('modalType').textContent = row.querySelector('td:nth-child(3)').querySelector('.badge').textContent;
+                document.getElementById('modalQuantity').textContent = row.querySelector('td:nth-child(4)').textContent;
+                document.getElementById('modalPrice').textContent = row.querySelector('td:nth-child(5)').textContent;
+                document.getElementById('modalDate').textContent = row.querySelector('td:nth-child(1)').textContent;
+                document.getElementById('modalStatus').textContent = row.querySelector('td:nth-child(8)').querySelector('.badge').textContent;
+                
+                // Option details
+                const strike = row.querySelector('td:nth-child(6)').textContent;
+                document.getElementById('modalStrike').textContent = strike;
+                
+                const expiry = row.querySelector('td:nth-child(7)').textContent;
+                document.getElementById('modalExpiry').textContent = expiry;
+                
+                // Calculate days to expiry (if applicable)
+                if (expiry !== '-') {
+                    const expiryDate = new Date(expiry);
+                    const today = new Date();
+                    const diffTime = Math.abs(expiryDate - today);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    document.getElementById('modalDaysToExpiry').textContent = diffDays;
+                } else {
+                    document.getElementById('modalDaysToExpiry').textContent = '-';
+                }
+                
+                // Premium calculation (simplified)
+                const price = parseFloat(row.querySelector('td:nth-child(5)').textContent.replace('$', ''));
+                const quantity = parseInt(row.querySelector('td:nth-child(4)').textContent);
+                
+                if (row.querySelector('td:nth-child(3)').querySelector('.badge').textContent.includes('COVERED CALL')) {
+                    const totalPremium = (price * quantity / 100).toFixed(2);
+                    document.getElementById('modalPremium').textContent = `$${price.toFixed(2)} ($${totalPremium} total)`;
+                    
+                    // Calculate returns
+                    if (strike !== '-') {
+                        const strikePrice = parseFloat(strike.replace('$', ''));
+                        const entryPrice = strikePrice - price;
+                        const returnPct = (price / entryPrice * 100).toFixed(2);
+                        document.getElementById('modalReturn').textContent = `${returnPct}%`;
+                        
+                        // Annualized (assuming 30 days)
+                        const annReturn = (returnPct * (365 / 30)).toFixed(2);
+                        document.getElementById('modalAnnReturn').textContent = `${annReturn}%`;
+                        
+                        // Progress bar (simplified)
+                        const progressPct = Math.min(100, Math.max(0, 25)); // Demo value
+                        document.getElementById('modalProgressBar').style.width = `${progressPct}%`;
+                        document.getElementById('modalProgressBar').textContent = `${progressPct}%`;
+                    } else {
+                        document.getElementById('modalReturn').textContent = '-';
+                        document.getElementById('modalAnnReturn').textContent = '-';
+                    }
+                } else {
+                    document.getElementById('modalPremium').textContent = '-';
+                    document.getElementById('modalReturn').textContent = '-';
+                    document.getElementById('modalAnnReturn').textContent = '-';
+                    document.getElementById('modalProgressBar').style.width = '0%';
+                    document.getElementById('modalProgressBar').textContent = '0%';
+                }
+                
+                // Show the modal
+                tradeDetailsModal.show();
+            });
+        });
+        
+        // Apply initial filters
+        applyFilters();
+    });
+</script>
+{% endblock %}
