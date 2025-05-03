@@ -76,18 +76,23 @@ class APIConnector:
     def _init_schwab(self):
         """Initialize Charles Schwab API connection"""
         self.session = requests.Session()
-        self.base_url = "https://api.schwabapi.com/v1"
+        
+        # For paper trading mode - updated to correct endpoints
+        if self.paper_trading:
+            self.base_url = "https://api-sandbox.schwab.com/v1"
+        else:
+            self.base_url = "https://api.schwab.com/v1"
         
         # Schwab APIs typically require OAuth2 authentication
         # This is a simplified version; in practice, full OAuth2 flow would be needed
-        self.session.headers.update({
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
-        })
-        
-        # For paper trading mode
-        if self.paper_trading:
-            self.base_url = "https://api-sandbox.schwabapi.com/v1"
+        if self.api_key and self.api_secret:
+            self.session.headers.update({
+                'Authorization': f'Bearer {self.api_key}',
+                'X-API-Key': self.api_secret,
+                'Content-Type': 'application/json'
+            })
+        else:
+            logger.warning("Missing API credentials. Please configure API settings.")
             
         logger.info(f"Initialized Charles Schwab API connector with paper trading: {self.paper_trading}")
     
