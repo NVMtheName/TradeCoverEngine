@@ -91,10 +91,13 @@ class APIConnector:
                 'X-API-Key': self.api_secret,
                 'Content-Type': 'application/json'
             })
+            logger.info(f"Initialized Charles Schwab API connector with paper trading: {self.paper_trading}")
         else:
             logger.warning("Missing API credentials. Please configure API settings.")
             
-        logger.info(f"Initialized Charles Schwab API connector with paper trading: {self.paper_trading}")
+        # Add special message about Schwab API access
+        logger.warning("NOTE: To use Charles Schwab API, you need to register your application and IP addresses with Schwab Developer Center. See https://developer.schwab.com/get-started for details.")
+        logger.warning("For development purposes, you may want to use Alpaca which offers unrestricted paper trading API access.")
     
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""
