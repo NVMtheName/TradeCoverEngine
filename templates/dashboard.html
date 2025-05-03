@@ -35,6 +35,21 @@
             </button>
         </div>
     </div>
+    
+    {% if account_info.get('api_status') == 'Error' and request.path == '/dashboard' %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <h5 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> Schwab API Connection Issue</h5>
+        <p>Unable to connect to Charles Schwab API. This is likely due to one of the following reasons:</p>
+        <ul>
+            <li>Your API credentials need to be registered with the <a href="https://developer.schwab.com/get-started" target="_blank">Schwab Developer Center</a></li>
+            <li>Your application's IP addresses need to be whitelisted in your Schwab developer account</li>
+            <li>Schwab API requires OAuth2 authentication flow rather than simple API keys</li>
+        </ul>
+        <p>For development and testing, consider switching to <strong>Alpaca</strong> which offers unrestricted paper trading API access.</p>
+        <a href="{{ url_for('settings') }}" class="btn btn-primary btn-sm">Change API Provider</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
 
     <!-- Account Summary -->
     <div class="row mb-4">

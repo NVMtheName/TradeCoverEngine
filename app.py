@@ -138,19 +138,30 @@ def dashboard():
     open_positions = []
     
     try:
-        if api_connector and api_connector.is_connected():
-            account_info = api_connector.get_account_info()
+        if api_connector:
+            # Get recent trades from database
             recent_trades = Trade.query.order_by(Trade.timestamp.desc()).limit(10).all()
-            open_positions = api_connector.get_open_positions()
             
-            # Get performance data for charts
-            performance_data = {
-                'equity_history': api_connector.get_equity_history(),
-                'monthly_returns': api_connector.get_monthly_returns()
-            }
+            # Check if API is connected
+            if api_connector.is_connected():
+                account_info = api_connector.get_account_info()
+                open_positions = api_connector.get_open_positions()
+                
+                # Get performance data for charts
+                performance_data = {
+                    'equity_history': api_connector.get_equity_history(),
+                    'monthly_returns': api_connector.get_monthly_returns()
+                }
+            else:
+                # Set API status to Error for the alert to display
+                account_info = api_connector.get_account_info()
+                account_info['api_status'] = 'Error'
+                logger.warning("API is not connected. Using fallback data.")
     except Exception as e:
         logger.error(f"Error retrieving dashboard data: {str(e)}")
         flash(f"Error loading dashboard data: {str(e)}", "danger")
+        # Ensure API status is set to Error
+        account_info['api_status'] = 'Error'
     
     return render_template(
         'dashboard.html', 
