@@ -270,3 +270,138 @@ Include a brief explanation for each parameter."""
                 "parameters": {},
                 "explanation": f"Error optimizing strategy: {str(e)}"
             }
+            
+    def scan_market_for_stocks(self, market_data, sectors=None, min_price=10, max_price=500):
+        """
+        Scan the market to identify promising stocks for trading strategies.
+        
+        Args:
+            market_data (dict): Overall market data and indicators
+            sectors (list, optional): List of sectors to focus on
+            min_price (float): Minimum stock price to consider
+            max_price (float): Maximum stock price to consider
+            
+        Returns:
+            list: Recommended stock symbols with reasoning
+        """
+        if not self.is_available():
+            return []
+        
+        try:
+            # Create prompt for stock picking
+            sectors_text = f"focusing on these sectors: {', '.join(sectors)}" if sectors else "across all market sectors"
+            
+            prompt = f"""As an AI stock picker, identify 5-10 promising stocks {sectors_text} that are good candidates for options trading strategies, particularly covered calls or cash-secured puts.
+
+Market context:
+{json.dumps(market_data, indent=2)}
+
+Find stocks that meet these criteria:
+1. Price between ${min_price} and ${max_price}
+2. Good liquidity (high trading volume)
+3. Moderate to high implied volatility (for better options premiums)
+4. Stable fundamentals but with potential for growth or recovery
+5. Technical indicators showing potential entry points
+
+Return a JSON array of objects with the following properties for each stock:
+- symbol: The stock ticker symbol
+- reason: Brief explanation of why this stock is a good candidate (2-3 sentences)
+- strategy: Recommended options strategy ('covered_call', 'cash_secured_put', 'iron_condor', etc.)
+- confidence: Your confidence in the recommendation (0-1 scale)
+"""
+            
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.4  # Slightly higher temperature for more variety
+            )
+            
+            # Parse response
+            result = json.loads(response.choices[0].message.content)
+            
+            # Extract stock recommendations
+            recommendations = result.get('stocks', [])
+            if not recommendations and isinstance(result, list):
+                recommendations = result  # Handle case where response is a direct array
+                
+            logger.info(f"AI advisor identified {len(recommendations)} promising stocks")
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Error scanning market for stocks: {str(e)}")
+            return []
+    
+    def evaluate_position_adjustment(self, position_data):
+        """
+        Evaluate whether a position should be adjusted based on current market conditions.
+        
+        Args:
+            position_data (dict): Data about the position and market conditions
+            
+        Returns:
+            dict: Adjustment recommendation
+        """
+        if not self.is_available():
+            return {
+                "action": "NO_ACTION",
+                "reason": "AI advisor not available. Please provide an OpenAI API key."
+            }
+        
+        try:
+            # Extract key information from position data
+            symbol = position_data.get('symbol')
+            position_type = position_data.get('position', {}).get('position_type', 'unknown')
+            current_price = position_data.get('current_price')
+            entry_price = position_data.get('position', {}).get('entry_price')
+            suggested_adjustment = position_data.get('suggested_adjustment', {})
+            
+            # Create prompt for position evaluation
+            prompt = f"""Evaluate a trading position and determine if the suggested adjustment is appropriate based on current market conditions.
+
+Position details:
+- Symbol: {symbol}
+- Type: {position_type}
+- Entry price: ${entry_price}
+- Current price: ${current_price}
+- Days held: {position_data.get('position', {}).get('days_held', 'unknown')}
+
+Suggested adjustment: {suggested_adjustment.get('action')}
+Reason: {suggested_adjustment.get('reason')}
+
+Based on the price history and other factors, evaluate if this adjustment is appropriate. Consider:
+1. Current market conditions
+2. Technical indicators
+3. Risk/reward of the adjustment
+4. Alternative adjustments that might be better
+
+Return your analysis in JSON format with the following properties:
+- action: The recommended action ('ACCEPT_SUGGESTED', 'ALTERNATIVE', 'NO_ACTION')
+- alternative_action: If action is 'ALTERNATIVE', specify what action to take instead
+- reason: Detailed explanation of your recommendation
+- confidence: Your confidence in this recommendation (0-1 scale)
+"""
+            
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3
+            )
+            
+            # Parse response
+            result = json.loads(response.choices[0].message.content)
+            
+            logger.info(f"AI advisor evaluated position adjustment for {symbol}: {result.get('action')}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error evaluating position adjustment: {str(e)}")
+            return {
+                "action": "NO_ACTION",
+                "reason": f"Error evaluating adjustment: {str(e)}"
+            }

@@ -16,4 +16,5 @@ dependencies = [
     "python-dateutil>=2.9.0.post0",
     "matplotlib>=3.10.1",
     "openai>=1.77.0",
+    "trafilatura>=2.0.0",
 ]
