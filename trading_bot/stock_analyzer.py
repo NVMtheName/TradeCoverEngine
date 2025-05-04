@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import logging
+import os
 from datetime import datetime, timedelta
+from trading_bot.ai_advisor import AIAdvisor
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -9,6 +11,7 @@ logger = logging.getLogger(__name__)
 class StockAnalyzer:
     """
     Analyzes stock data to identify potential covered call opportunities.
+    Incorporates AI-powered analysis when available.
     """
     
     def __init__(self, api_connector):
@@ -19,6 +22,13 @@ class StockAnalyzer:
             api_connector: An instance of APIConnector for data retrieval
         """
         self.api_connector = api_connector
+        
+        # Initialize AI advisor if OpenAI API key is available
+        self.ai_advisor = AIAdvisor()
+        if self.ai_advisor.is_available():
+            logger.info("AI-powered stock analysis enabled.")
+        else:
+            logger.info("AI-powered stock analysis not available. Using standard analysis only.")
     
     def analyze_stock(self, symbol):
         """
@@ -86,6 +96,30 @@ class StockAnalyzer:
                 'call_recommendations': call_recommendations,
                 'recommendation': recommendation
             }
+            
+            # Add AI-powered analysis if available
+            if self.ai_advisor.is_available():
+                try:
+                    ai_analysis = self.ai_advisor.analyze_stock(symbol, stock_data)
+                    analysis_result['ai_analysis'] = ai_analysis
+                    
+                    # Enhance recommendation with AI insights
+                    if ai_analysis['suitability_score'] > 7:
+                        analysis_result['recommendation']['ai_enhanced'] = True
+                        analysis_result['recommendation']['confidence'] = max(
+                            analysis_result['recommendation'].get('confidence', 0.5),
+                            ai_analysis['confidence']
+                        )
+                        
+                        # Add AI recommendation for strike price if different
+                        if ai_analysis['recommendation']['strike_price']:
+                            analysis_result['recommendation']['ai_strike_price'] = ai_analysis['recommendation']['strike_price']
+                            analysis_result['recommendation']['ai_days_to_expiration'] = ai_analysis['recommendation']['days_to_expiration']
+                    
+                    logger.info(f"Added AI-powered analysis for {symbol}")
+                except Exception as e:
+                    logger.error(f"Error adding AI analysis for {symbol}: {str(e)}")
+                    # Continue without AI analysis
             
             return analysis_result
         
