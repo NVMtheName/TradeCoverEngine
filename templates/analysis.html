@@ -36,6 +36,9 @@
     .call-option-row.selected {
         background-color: rgba(13, 110, 253, 0.1);
     }
+    .border-left-info {
+        border-left: 4px solid var(--bs-info);
+    }
 </style>
 {% endblock %}
 
@@ -117,6 +120,11 @@
                     <h6>Selection Criteria</h6>
                     <div class="alert alert-info p-2 small">
                         <i class="fas fa-info-circle me-1"></i> The bot analyzes technical indicators, volatility, and options premium to find the best opportunities.
+                    </div>
+                    
+                    <h6><i class="fas fa-robot me-1"></i> AI-Powered Analysis</h6>
+                    <div class="alert alert-primary p-2 small">
+                        <i class="fas fa-brain me-1"></i> Our AI advisor provides enhanced insights, personalized recommendations, and risk assessment for covered call opportunities.
                     </div>
                     
                     <h6>Popular Covered Call Stocks</h6>
@@ -263,6 +271,68 @@
                                             </div>
                                             
                                             <div class="col-md-8">
+                                                <div class="row mb-3">
+                                                    <div class="col-12">
+                                                        <h6 class="border-bottom pb-2 mb-3">AI-Powered Analysis</h6>
+                                                        {% if opportunity.ai_analysis is defined and opportunity.ai_analysis %}
+                                                            <div class="card mb-3 border-left-info">
+                                                                <div class="card-body">
+                                                                    <div class="d-flex justify-content-between mb-2">
+                                                                        <h6 class="card-title mb-0">
+                                                                            <i class="fas fa-robot text-primary me-2"></i>
+                                                                            AI Insights
+                                                                        </h6>
+                                                                        <span class="badge {% if opportunity.ai_analysis.suitability_score >= 7 %}bg-success{% elif opportunity.ai_analysis.suitability_score >= 5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                                            Suitability: {{ opportunity.ai_analysis.suitability_score }}/10
+                                                                        </span>
+                                                                    </div>
+                                                                    <p class="card-text">{{ opportunity.ai_analysis.ai_insights }}</p>
+                                                                    
+                                                                    <div class="row mt-3">
+                                                                        <div class="col-md-6">
+                                                                            <h6 class="small text-muted">AI Recommendation</h6>
+                                                                            <ul class="list-unstyled small">
+                                                                                {% if opportunity.ai_analysis.recommendation.strike_price %}
+                                                                                <li><i class="fas fa-arrow-right text-primary me-1"></i> Strike Price: ${{ opportunity.ai_analysis.recommendation.strike_price }}</li>
+                                                                                {% endif %}
+                                                                                {% if opportunity.ai_analysis.recommendation.days_to_expiration %}
+                                                                                <li><i class="fas fa-arrow-right text-primary me-1"></i> Days to Expiration: {{ opportunity.ai_analysis.recommendation.days_to_expiration }}</li>
+                                                                                {% endif %}
+                                                                                <li><i class="fas fa-arrow-right text-primary me-1"></i> Confidence: {{ (opportunity.ai_analysis.confidence * 100)|round(0) }}%</li>
+                                                                            </ul>
+                                                                        </div>
+                                                                        <div class="col-md-6">
+                                                                            <div class="row">
+                                                                                <div class="col-6">
+                                                                                    <h6 class="small text-muted">Risks</h6>
+                                                                                    <ul class="small text-danger">
+                                                                                        {% for risk in opportunity.ai_analysis.risks[:2] %}
+                                                                                            <li>{{ risk }}</li>
+                                                                                        {% endfor %}
+                                                                                    </ul>
+                                                                                </div>
+                                                                                <div class="col-6">
+                                                                                    <h6 class="small text-muted">Rewards</h6>
+                                                                                    <ul class="small text-success">
+                                                                                        {% for reward in opportunity.ai_analysis.rewards[:2] %}
+                                                                                            <li>{{ reward }}</li>
+                                                                                        {% endfor %}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="alert alert-info">
+                                                                <i class="fas fa-info-circle me-2"></i>
+                                                                AI analysis not available for this stock. Either the AI advisor is not enabled or an error occurred generating analysis.
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                                
                                                 <h6 class="border-bottom pb-2 mb-3">Price Chart</h6>
                                                 <div class="chart-container">
                                                     <canvas id="stockChart{{ loop.index }}" data-chart-symbol="{{ opportunity.symbol }}"></canvas>
