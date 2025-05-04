@@ -402,6 +402,7 @@
         const apiKey = document.getElementById('api_key').value;
         const apiSecret = document.getElementById('api_secret').value;
         const isPaperTrading = document.getElementById('is_paper_trading').checked;
+        const forceSimulationMode = document.getElementById('force_simulation_mode').checked;
         
         if (!apiKey || !apiSecret) {
             alert('Please enter both API key and secret to test connection.');
@@ -424,7 +425,8 @@
                 provider: provider,
                 api_key: apiKey,
                 api_secret: apiSecret,
-                is_paper_trading: isPaperTrading
+                is_paper_trading: isPaperTrading,
+                force_simulation_mode: forceSimulationMode
             })
         })
         .then(response => response.json())
