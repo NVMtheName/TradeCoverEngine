@@ -218,36 +218,85 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Testing...';
         btn.disabled = true;
         
-        // Simulate connection test
-        setTimeout(function() {
-            // Get values
-            const provider = document.getElementById('api_provider').value;
-            const apiKey = document.getElementById('api_key').value;
-            const apiSecret = document.getElementById('api_secret').value;
+        // Get values
+        const provider = document.getElementById('api_provider').value;
+        const apiKey = document.getElementById('api_key').value;
+        const apiSecret = document.getElementById('api_secret').value;
+        const isPaperTrading = document.getElementById('is_paper_trading').checked;
+        
+        if (!apiKey || !apiSecret) {
+            alert('Please enter both API key and secret to test connection.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            return;
+        }
+        
+        // Remove any existing alerts
+        const existingAlerts = btn.parentNode.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Perform real API connection test
+        fetch('/api/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                provider: provider,
+                api_key: apiKey,
+                api_secret: apiSecret,
+                is_paper_trading: isPaperTrading
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const alertClass = data.success ? 'alert-success' : 'alert-danger';
+            const icon = data.success ? 'fa-check-circle' : 'fa-exclamation-circle';
             
-            if (!apiKey || !apiSecret) {
-                alert('Please enter both API key and secret to test connection.');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                return;
+            const alert = document.createElement('div');
+            alert.className = `alert ${alertClass} mt-3`;
+            alert.innerHTML = `<i class="fas ${icon} me-2"></i> ${data.message}`;
+            
+            if (!data.success && provider === 'schwab') {
+                // Add additional information for Schwab users
+                const moreInfo = document.createElement('div');
+                moreInfo.className = 'mt-2 small';
+                moreInfo.innerHTML = `
+                    <strong>Note for Schwab API:</strong><br>
+                    You must register your application with the Schwab Developer Center and 
+                    whitelist your IP addresses. Visit <a href="https://developer.schwab.com/get-started" 
+                    target="_blank">Schwab Developer Portal</a> for details.<br>
+                    For testing purposes, you may want to switch to Alpaca which offers unrestricted paper trading API access.
+                `;
+                alert.appendChild(moreInfo);
             }
             
-            // Show success message (this would actually check the API in a real implementation)
-            const successAlert = document.createElement('div');
-            successAlert.className = 'alert alert-success mt-3';
-            successAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i> Connection successful! Your API credentials are valid.';
+            btn.parentNode.appendChild(alert);
             
-            btn.parentNode.appendChild(successAlert);
+            btn.innerHTML = data.success ? 
+                '<i class="fas fa-check me-2"></i> Connection Verified' : 
+                '<i class="fas fa-times me-2"></i> Connection Failed';
             
-            btn.innerHTML = '<i class="fas fa-check me-2"></i> Connection Verified';
-            
-            // Reset button after 3 seconds
+            // Reset button after a few seconds
             setTimeout(function() {
-                successAlert.remove();
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-            }, 3000);
-        }, 1500);
+            }, 4000);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const errorAlert = document.createElement('div');
+            errorAlert.className = 'alert alert-danger mt-3';
+            errorAlert.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i> Error testing connection: ${error.message}`;
+            btn.parentNode.appendChild(errorAlert);
+            
+            btn.innerHTML = '<i class="fas fa-times me-2"></i> Connection Failed';
+            
+            setTimeout(function() {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 4000);
+        });
     });
     
     // Apply strategy presets
