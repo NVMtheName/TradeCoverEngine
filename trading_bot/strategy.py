@@ -1,10 +1,81 @@
 import logging
 from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-class CoveredCallStrategy:
+class OptionsStrategy(ABC):
+    """
+    Abstract base class for options trading strategies.
+    All strategies must implement the key methods defined here.
+    """
+    
+    def __init__(self, risk_level='moderate', profit_target_percentage=5.0, 
+                 stop_loss_percentage=3.0, options_expiry_days=30):
+        """
+        Initialize the options strategy with common parameters.
+        
+        Args:
+            risk_level (str): Risk level - 'conservative', 'moderate', or 'aggressive'
+            profit_target_percentage (float): Target profit percentage for early exit
+            stop_loss_percentage (float): Stop loss percentage to limit downside
+            options_expiry_days (int): Target days until expiration for options
+        """
+        self.risk_level = risk_level
+        self.profit_target_percentage = profit_target_percentage
+        self.stop_loss_percentage = stop_loss_percentage
+        self.options_expiry_days = options_expiry_days
+        
+        # Configure strategy parameters based on risk level
+        self._configure_risk_parameters()
+    
+    @abstractmethod
+    def _configure_risk_parameters(self):
+        """Configure strategy parameters based on the selected risk level"""
+        pass
+    
+    @abstractmethod
+    def select_options(self, stock_price, options_data):
+        """Select the best options for the strategy"""
+        pass
+    
+    @abstractmethod
+    def adjust_position(self, position, current_price):
+        """Determine if a position needs adjustment based on price movement"""
+        pass
+    
+    @abstractmethod
+    def generate_order_parameters(self, action, position, available_options=None):
+        """Generate order parameters for trade execution"""
+        pass
+    
+    def calculate_days_to_expiry(self, expiry_date):
+        """Calculate days until expiration for an option"""
+        if not expiry_date:
+            return 0
+        
+        try:
+            # Handle different date formats
+            if 'T' in expiry_date:
+                # ISO format with time component
+                expiry = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+            else:
+                # Date only format YYYY-MM-DD
+                expiry = datetime.strptime(expiry_date, '%Y-%m-%d')
+                
+            return (expiry - datetime.now()).days
+        except Exception as e:
+            logger.error(f"Error calculating days to expiry: {e}")
+            return 0
+    
+    def is_within_expiry_range(self, days_to_expiry, tolerance=10):
+        """Check if an option expiry is within our target range"""
+        expiry_min = max(7, self.options_expiry_days - tolerance)
+        expiry_max = self.options_expiry_days + tolerance
+        return expiry_min <= days_to_expiry <= expiry_max
+
+class CoveredCallStrategy(OptionsStrategy):
     """
     Implements a covered call options strategy to generate income from stock holdings.
     """

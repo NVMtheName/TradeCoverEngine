@@ -30,6 +30,7 @@ class Settings(db.Model):
     profit_target_percentage = db.Column(db.Float, default=5.0)
     stop_loss_percentage = db.Column(db.Float, default=3.0)
     options_expiry_days = db.Column(db.Integer, default=30)  # Target days until expiration
+    enabled_strategies = db.Column(db.String(255), default='covered_call')  # Comma-separated list of enabled strategies
     
     # Last updated timestamp
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
