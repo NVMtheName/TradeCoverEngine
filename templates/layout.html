@@ -52,6 +52,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/auto-trading' %}active{% endif %}" href="{{ url_for('auto_trading') }}">
+                            <i class="fas fa-robot me-1"></i> Auto Trading
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.path == '/settings' %}active{% endif %}" href="{{ url_for('settings') }}">
                             <i class="fas fa-cog me-1"></i> Settings
                         </a>
@@ -100,6 +105,7 @@
                         <li><a href="{{ url_for('dashboard') }}" class="text-decoration-none">Dashboard</a></li>
                         <li><a href="{{ url_for('analysis') }}" class="text-decoration-none">Stock Analysis</a></li>
                         <li><a href="{{ url_for('trades') }}" class="text-decoration-none">Trade History</a></li>
+                        <li><a href="{{ url_for('auto_trading') }}" class="text-decoration-none">Auto Trading</a></li>
                     </ul>
                 </div>
                 <div class="col-md-3">

@@ -142,6 +142,34 @@ def initialize_app():
                 max_position_size=settings.max_position_size
             )
             
+            # Initialize AI advisor
+            ai_advisor = AIAdvisor()
+            
+            # Initialize auto trader if AI advisor is available
+            if ai_advisor.is_available():
+                auto_trader = AutoTrader(
+                    api_connector=api_connector,
+                    ai_advisor=ai_advisor,
+                    trade_executor=trade_executor,
+                    stock_analyzer=stock_analyzer
+                )
+                
+                # Set auto trader watchlist from database
+                watchlist_items = WatchlistItem.query.all()
+                if watchlist_items:
+                    auto_trader.set_watchlist([item.symbol for item in watchlist_items])
+                
+                # Set trading parameters
+                auto_trader.set_trading_parameters({
+                    'max_position_size': settings.max_position_size,
+                    'scan_interval_hours': 6,  # Scan every 6 hours
+                    'max_concurrent_trades': 5,  # Maximum of 5 concurrent trades
+                    'confidence_threshold': 0.7  # Minimum AI confidence score
+                })
+            else:
+                logger.warning("AI advisor not available. Auto trader will not be initialized.")
+                auto_trader = None
+            
             logger.info("Trading bot components initialized successfully")
             
         except Exception as e:
@@ -151,7 +179,7 @@ def initialize_app():
 @app.before_request
 def before_request():
     # Initialize app if components are not set up
-    global api_connector
+    global api_connector, ai_advisor, auto_trader
     if api_connector is None:
         initialize_app()
 
@@ -509,6 +537,162 @@ def oauth_callback():
         return redirect(url_for('settings'))
 
 # Error handling
+# Auto trading routes
+@app.route('/auto-trading')
+def auto_trading():
+    """Display auto trading status and controls"""
+    status = {}
+    ai_status = {}
+    scan_results = []
+    watchlist = []
+    
+    try:
+        # Get watchlist items
+        watchlist = WatchlistItem.query.all()
+        
+        # Check if auto trader is available
+        if auto_trader:
+            status = auto_trader.get_status()
+            
+            # Check if AI advisor is available
+            if ai_advisor:
+                ai_status = {
+                    'is_available': ai_advisor.is_available(),
+                    'api_key_set': bool(ai_advisor.api_key)
+                }
+        else:
+            status = {
+                'is_enabled': False,
+                'error': 'Auto trader not initialized'
+            }
+            
+            ai_status = {
+                'is_available': ai_advisor.is_available() if ai_advisor else False,
+                'api_key_set': bool(ai_advisor.api_key) if ai_advisor else False
+            }
+    except Exception as e:
+        logger.error(f"Error getting auto trading status: {str(e)}")
+        flash(f"Error getting auto trading status: {str(e)}", 'danger')
+    
+    return render_template(
+        'auto_trading.html',
+        status=status,
+        ai_status=ai_status,
+        scan_results=scan_results,
+        watchlist=watchlist
+    )
+
+@app.route('/auto-trading/start', methods=['POST'])
+def start_auto_trading():
+    """Start the auto trader"""
+    try:
+        if auto_trader:
+            result = auto_trader.start()
+            
+            if result:
+                flash('Auto trader started successfully', 'success')
+            else:
+                flash('Auto trader is already running', 'warning')
+        else:
+            flash('Auto trader not initialized. Please check your OpenAI API key.', 'danger')
+    except Exception as e:
+        logger.error(f"Error starting auto trader: {str(e)}")
+        flash(f"Error starting auto trader: {str(e)}", 'danger')
+    
+    return redirect(url_for('auto_trading'))
+
+@app.route('/auto-trading/stop', methods=['POST'])
+def stop_auto_trading():
+    """Stop the auto trader"""
+    try:
+        if auto_trader:
+            result = auto_trader.stop()
+            
+            if result:
+                flash('Auto trader stopped successfully', 'success')
+            else:
+                flash('Auto trader is not running', 'warning')
+        else:
+            flash('Auto trader not initialized', 'danger')
+    except Exception as e:
+        logger.error(f"Error stopping auto trader: {str(e)}")
+        flash(f"Error stopping auto trader: {str(e)}", 'danger')
+    
+    return redirect(url_for('auto_trading'))
+
+@app.route('/auto-trading/scan', methods=['POST'])
+def scan_for_opportunities():
+    """Manually trigger a scan for trading opportunities"""
+    opportunities = []
+    
+    try:
+        if auto_trader:
+            opportunities = auto_trader.scan_for_opportunities(force=True)
+            
+            if opportunities:
+                flash(f'Found {len(opportunities)} trading opportunities', 'success')
+            else:
+                flash('No trading opportunities found', 'info')
+        else:
+            flash('Auto trader not initialized', 'danger')
+    except Exception as e:
+        logger.error(f"Error scanning for opportunities: {str(e)}")
+        flash(f"Error scanning for opportunities: {str(e)}", 'danger')
+    
+    # Store scan results in session for display
+    session['scan_results'] = opportunities
+    
+    return redirect(url_for('auto_trading'))
+
+@app.route('/auto-trading/settings', methods=['POST'])
+def update_auto_trading_settings():
+    """Update auto trading settings"""
+    try:
+        if auto_trader:
+            # Get settings from form
+            max_position_size = float(request.form.get('max_position_size', 5000))
+            scan_interval_hours = int(request.form.get('scan_interval_hours', 6))
+            max_concurrent_trades = int(request.form.get('max_concurrent_trades', 5))
+            confidence_threshold = float(request.form.get('confidence_threshold', 0.7))
+            
+            # Update auto trader settings
+            auto_trader.set_trading_parameters({
+                'max_position_size': max_position_size,
+                'scan_interval_hours': scan_interval_hours,
+                'max_concurrent_trades': max_concurrent_trades,
+                'confidence_threshold': confidence_threshold
+            })
+            
+            flash('Auto trading settings updated successfully', 'success')
+        else:
+            flash('Auto trader not initialized', 'danger')
+    except Exception as e:
+        logger.error(f"Error updating auto trading settings: {str(e)}")
+        flash(f"Error updating auto trading settings: {str(e)}", 'danger')
+    
+    return redirect(url_for('auto_trading'))
+
+@app.route('/api/ai-analysis/<symbol>')
+def ai_analysis(symbol):
+    """Get AI analysis for a symbol"""
+    try:
+        if ai_advisor and ai_advisor.is_available():
+            # Get stock data
+            price_history = api_connector.get_stock_data(symbol, days=90)
+            
+            # Get AI analysis
+            analysis = ai_advisor.analyze_stock(symbol, price_history)
+            
+            return jsonify(analysis)
+        else:
+            return jsonify({
+                'error': 'AI advisor not available',
+                'ai_insights': 'AI advisor not available. Please provide an OpenAI API key.'
+            }), 500
+    except Exception as e:
+        logger.error(f"Error getting AI analysis for {symbol}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('error.html', error="404 - Page Not Found"), 404

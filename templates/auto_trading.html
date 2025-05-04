@@ -1,0 +1,192 @@
+{% extends 'layout.html' %}
+
+{% block title %}Auto Trading{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">AI Auto Trading</h1>
+    
+    <div class="row">
+        <!-- Left column - Status and controls -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Auto Trading Status</h5>
+                </div>
+                <div class="card-body">
+                    {% if status and status.get('is_enabled') %}
+                        <div class="alert alert-success" role="alert">
+                            <i class="bi bi-robot"></i> Auto trader is <strong>active</strong>
+                        </div>
+                        <p>
+                            <strong>Running since:</strong> {{ status.get('running_since', 'Unknown') }}<br>
+                            <strong>Next scan:</strong> {{ status.get('next_scan_time', 'Not scheduled') }}<br>
+                            <strong>Trades executed:</strong> {{ status.get('trades_executed', 0) }}
+                        </p>
+                        <form action="{{ url_for('stop_auto_trading') }}" method="post">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-stop-circle"></i> Stop Auto Trading
+                            </button>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-secondary" role="alert">
+                            <i class="bi bi-robot"></i> Auto trader is <strong>inactive</strong>
+                        </div>
+                        {% if status.get('error') %}
+                            <div class="alert alert-warning" role="alert">
+                                <strong>Error:</strong> {{ status.get('error') }}
+                            </div>
+                        {% endif %}
+                        <form action="{{ url_for('start_auto_trading') }}" method="post">
+                            <button type="submit" class="btn btn-primary" {% if not ai_status.get('is_available') %}disabled{% endif %}>
+                                <i class="bi bi-play-circle"></i> Start Auto Trading
+                            </button>
+                        </form>
+                        {% if not ai_status.get('is_available') %}
+                            <div class="alert alert-warning mt-3" role="alert">
+                                <strong>AI Advisor not available.</strong> Please check your OpenAI API key in settings.
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Auto Trading Settings</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('update_auto_trading_settings') }}" method="post">
+                        <div class="mb-3">
+                            <label for="max_position_size" class="form-label">Maximum Position Size ($)</label>
+                            <input type="number" class="form-control" id="max_position_size" name="max_position_size" 
+                                   value="{{ status.get('settings', {}).get('max_position_size', 5000) }}" 
+                                   min="100" max="50000" step="100">
+                            <div class="form-text">Maximum dollar amount to invest in a single position</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="scan_interval_hours" class="form-label">Scan Interval (hours)</label>
+                            <input type="number" class="form-control" id="scan_interval_hours" name="scan_interval_hours" 
+                                   value="{{ status.get('settings', {}).get('scan_interval_hours', 6) }}" 
+                                   min="1" max="24" step="1">
+                            <div class="form-text">How often to scan for new trading opportunities</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="max_concurrent_trades" class="form-label">Max Concurrent Trades</label>
+                            <input type="number" class="form-control" id="max_concurrent_trades" name="max_concurrent_trades" 
+                                   value="{{ status.get('settings', {}).get('max_concurrent_trades', 5) }}" 
+                                   min="1" max="20" step="1">
+                            <div class="form-text">Maximum number of concurrent automated trades</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="confidence_threshold" class="form-label">AI Confidence Threshold</label>
+                            <input type="number" class="form-control" id="confidence_threshold" name="confidence_threshold" 
+                                   value="{{ status.get('settings', {}).get('confidence_threshold', 0.7) }}" 
+                                   min="0.1" max="0.99" step="0.05">
+                            <div class="form-text">Minimum confidence score (0.1-0.99) for automated trades</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" {% if not ai_status.get('is_available') %}disabled{% endif %}>
+                            <i class="bi bi-gear"></i> Update Settings
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right column - Market scan and watchlist -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Market Scan</h5>
+                    <form action="{{ url_for('scan_for_opportunities') }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-primary" {% if not ai_status.get('is_available') %}disabled{% endif %}>
+                            <i class="bi bi-search"></i> Scan Now
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    {% if session.get('scan_results') %}
+                        <div class="alert alert-info">
+                            <strong>Last scan:</strong> Found {{ session.get('scan_results')|length }} opportunities
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Strategy</th>
+                                        <th>AI Score</th>
+                                        <th>Est. Return</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for opportunity in session.get('scan_results') %}
+                                    <tr>
+                                        <td>{{ opportunity.symbol }}</td>
+                                        <td>{{ opportunity.strategy }}</td>
+                                        <td>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar" role="progressbar" style="width: {{ (opportunity.confidence * 100)|int }}%;" 
+                                                     aria-valuenow="{{ (opportunity.confidence * 100)|int }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                            </div>
+                                            {{ '%.1f'|format(opportunity.confidence * 100) }}%
+                                        </td>
+                                        <td>{{ opportunity.estimated_return }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">
+                            No scan results available. Click "Scan Now" to find AI-powered trading opportunities.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Watchlist</h5>
+                </div>
+                <div class="card-body">
+                    {% if watchlist %}
+                        <p class="text-muted mb-2">The auto trader will scan these stocks for opportunities:</p>
+                        <div class="d-flex flex-wrap mb-3 gap-2">
+                            {% for item in watchlist %}
+                                <span class="badge bg-primary">{{ item.symbol }}</span>
+                            {% endfor %}
+                        </div>
+                        <a href="{{ url_for('analysis') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> Edit Watchlist
+                        </a>
+                    {% else %}
+                        <p class="text-muted">
+                            Your watchlist is empty. Add stocks to your watchlist to enable auto trading.
+                        </p>
+                        <a href="{{ url_for('analysis') }}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-plus"></i> Add Stocks to Watchlist
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh page every 60 seconds when auto trader is running
+    {% if status and status.get('is_enabled') %}
+    setTimeout(function() {
+        window.location.reload();
+    }, 60000);
+    {% endif %}
+</script>
+{% endblock %}
