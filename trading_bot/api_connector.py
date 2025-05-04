@@ -141,6 +141,11 @@ class APIConnector:
     
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""
+        # If simulation mode is forced, we consider it connected
+        if self.force_simulation:
+            logger.info("Force simulation mode enabled - bypassing API connection check")
+            return True
+            
         if not self.api_key or not self.api_secret:
             logger.warning("Missing API credentials. Please configure API settings.")
             return False
@@ -207,7 +212,7 @@ class APIConnector:
     
     def get_account_info(self):
         """Get account information from the trading platform"""
-        if not self.api_key or not self.api_secret:
+        if self.force_simulation or not self.api_key or not self.api_secret:
             # Return demo/placeholder account data when no API keys are configured
             return {
                 'equity': '100000.00',
@@ -445,6 +450,10 @@ class APIConnector:
         Returns:
             dict: Historical price data
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            return self._generate_mock_stock_data(symbol, days)
+            
         try:
             if self.provider == 'alpaca':
                 end_date = datetime.now()
