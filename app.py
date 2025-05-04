@@ -360,6 +360,115 @@ def test_api_connection():
             'success': False,
             'message': f'Error: {str(e)}'
         }), 500
+        
+@app.route('/oauth/initiate')
+def oauth_initiate():
+    """Start OAuth2 authorization flow"""
+    try:
+        provider = request.args.get('provider', 'schwab')
+        settings = Settings.query.first()
+        
+        if provider == 'schwab':
+            # In a real implementation, you would redirect to Schwab's authorization URL
+            # with necessary parameters (client_id, redirect_uri, scope, etc.)
+            
+            # Generate a state parameter to prevent CSRF attacks
+            state = os.urandom(16).hex()
+            session['oauth_state'] = state
+            
+            # Get the base URL based on paper trading setting
+            auth_base_url = "https://api-sandbox.schwab.com/v1/oauth2/authorize" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/authorize"
+            
+            # Construct redirect URI for callback
+            redirect_uri = url_for('oauth_callback', _external=True)
+            
+            # For demonstration purposes, show what the URL would be
+            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts&state={state}"
+            
+            flash(f"For a real Schwab API integration, you would be redirected to authorize the application. The callback URL to register in your Schwab Developer account would be: {redirect_uri}", 'info')
+            
+            # In a real implementation with valid credentials, you would redirect here:
+            # return redirect(auth_url)
+            
+            return redirect(url_for('settings'))
+        else:
+            flash(f"OAuth flow not implemented for provider: {provider}", 'warning')
+            return redirect(url_for('settings'))
+    except Exception as e:
+        logger.error(f"Error initiating OAuth flow: {str(e)}")
+        flash(f"Error initiating OAuth flow: {str(e)}", 'danger')
+        return redirect(url_for('settings'))
+
+@app.route('/oauth/callback')
+def oauth_callback():
+    """Callback endpoint for OAuth2 authentication flow"""
+    try:
+        # Get the authorization code from the query parameters
+        code = request.args.get('code')
+        state = request.args.get('state')
+        
+        # Get the stored settings
+        settings = Settings.query.first()
+        
+        if not code:
+            flash('Authentication failed: No authorization code received.', 'danger')
+            return redirect(url_for('settings'))
+            
+        # Verify state parameter to prevent CSRF attacks
+        if state != session.get('oauth_state'):
+            flash('Authentication failed: Invalid state parameter.', 'danger')
+            return redirect(url_for('settings'))
+            
+        if settings.api_provider == 'schwab':
+            # Exchange the authorization code for an access token
+            # In a real implementation, you would make a POST request to Schwab's token endpoint
+            try:
+                # This is a simplified version; in production, you'd make a real API call
+                logger.info(f"Received OAuth2 authorization code: {code[:5]}...")
+                
+                # Get the token endpoint based on paper trading setting
+                token_url = "https://api-sandbox.schwab.com/v1/oauth2/token" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/token"
+                
+                # Construct redirect URI for callback (must match the one used in authorization request)
+                redirect_uri = url_for('oauth_callback', _external=True)
+                
+                # In a real implementation, you would make this request:
+                # token_response = requests.post(
+                #     token_url,
+                #     data={
+                #         'grant_type': 'authorization_code',
+                #         'code': code,
+                #         'client_id': settings.api_key,
+                #         'client_secret': settings.api_secret,
+                #         'redirect_uri': redirect_uri
+                #     },
+                #     headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                # )
+                # 
+                # if token_response.status_code == 200:
+                #     token_data = token_response.json()
+                #     access_token = token_data.get('access_token')
+                #     refresh_token = token_data.get('refresh_token')
+                #     expires_in = token_data.get('expires_in')
+                # 
+                #     # Store tokens in the database
+                #     settings.api_key = access_token  # Store access token as API key
+                #     settings.api_secret = refresh_token  # Store refresh token as API secret
+                #     db.session.commit()
+                
+                # Store the authorization code in the session (temporary)
+                session['schwab_auth_code'] = code
+                
+                flash('Authorization code received. In a production app, this would be exchanged for an access token.', 'info')
+            except Exception as e:
+                logger.error(f"Error in OAuth2 flow: {str(e)}")
+                flash(f"Error in authentication flow: {str(e)}", 'danger')
+        
+        return redirect(url_for('settings'))
+    except Exception as e:
+        logger.error(f"Error in OAuth callback: {str(e)}")
+        flash(f"Error in authentication flow: {str(e)}", 'danger')
+        return redirect(url_for('settings'))
 
 # Error handling
 @app.errorhandler(404)

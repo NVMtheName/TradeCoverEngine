@@ -57,10 +57,22 @@
                                 <div class="form-text">Enable to use paper trading (simulation mode)</div>
                             </div>
                             
-                            <div class="d-grid">
+                            <div class="d-grid gap-2">
                                 <button type="button" class="btn btn-outline-primary" id="testConnection">
                                     <i class="fas fa-plug me-2"></i> Test Connection
                                 </button>
+                                
+                                <div class="schwab-oauth-section" style="display: none;">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <strong>Schwab API requires OAuth2 authentication.</strong>
+                                        <p class="mb-0 mt-2">You need to register your application with the Schwab Developer Portal and set up a callback URL:</p>
+                                        <code id="callbackUrl" class="d-block mt-2 mb-2 p-2 bg-dark text-light">Loading...</code>
+                                        <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-key me-1"></i> Authenticate with Schwab
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -205,6 +217,31 @@
 
 {% block extra_js %}
 <script>
+    // Function to update the OAuth sections based on selected provider
+    function updateProviderSpecificSections() {
+        const provider = document.getElementById('api_provider').value;
+        const schwabSection = document.querySelector('.schwab-oauth-section');
+        
+        // Update Schwab OAuth section visibility
+        if (provider === 'schwab') {
+            schwabSection.style.display = 'block';
+            
+            // Set the callback URL
+            const origin = window.location.origin;
+            document.getElementById('callbackUrl').textContent = `${origin}/oauth/callback`;
+        } else {
+            schwabSection.style.display = 'none';
+        }
+    }
+    
+    // Run on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateProviderSpecificSections();
+        
+        // Add listener for provider changes
+        document.getElementById('api_provider').addEventListener('change', updateProviderSpecificSections);
+    });
+    
     // Update expiry value display
     document.getElementById('options_expiry_days').addEventListener('input', function() {
         document.getElementById('expiry_value').textContent = this.value + ' days';
