@@ -54,15 +54,19 @@ from trading_bot.api_connector import APIConnector
 from trading_bot.stock_analyzer import StockAnalyzer
 from trading_bot.strategies import CoveredCallStrategy, PutCreditSpreadStrategy, IronCondorStrategy
 from trading_bot.trade_executor import TradeExecutor
+from trading_bot.ai_advisor import AIAdvisor
+from trading_bot.auto_trader import AutoTrader
 
 # Create API connector instance (to be configured in settings)
 api_connector = None
 stock_analyzer = None
 strategy = None
 trade_executor = None
+ai_advisor = None
+auto_trader = None
 
 def initialize_app():
-    global api_connector, stock_analyzer, strategy, trade_executor
+    global api_connector, stock_analyzer, strategy, trade_executor, ai_advisor, auto_trader
     
     with app.app_context():
         # Create database tables
