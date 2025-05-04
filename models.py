@@ -8,15 +8,30 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
+    is_active = db.Column(db.Boolean, default=True)
+    last_login = db.Column(db.DateTime, nullable=True)
     
     # Relationships
     trades = db.relationship('Trade', backref='user', lazy=True)
     
+    def set_password(self, password):
+        """Set password hash for user"""
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Check password against stored hash"""
+        from werkzeug.security import check_password_hash
+        if self.password_hash:
+            return check_password_hash(self.password_hash, password)
+        return False
+        
     def __repr__(self):
         return f'<User {self.username}>'
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     
     # API settings
     api_provider = db.Column(db.String(50), default='alpaca')  # Options: alpaca, td_ameritrade, etc.
@@ -40,6 +55,9 @@ class Settings(db.Model):
     
     # Last updated timestamp
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Relationship with User
+    user = db.relationship('User', backref='settings', lazy=True)
     
     def __repr__(self):
         return f'<Settings {self.api_provider}>'
@@ -68,9 +86,16 @@ class Trade(db.Model):
 
 class WatchlistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    symbol = db.Column(db.String(10), nullable=False, unique=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    symbol = db.Column(db.String(10), nullable=False)
     added_at = db.Column(db.DateTime, default=datetime.now)
     notes = db.Column(db.Text, nullable=True)
+    
+    # Relationship with User
+    user = db.relationship('User', backref='watchlist_items', lazy=True)
+    
+    # Define a unique constraint for symbol per user
+    __table_args__ = (db.UniqueConstraint('user_id', 'symbol', name='unique_user_symbol'),)
     
     def __repr__(self):
         return f'<WatchlistItem {self.symbol}>'

@@ -170,11 +170,44 @@
                 });
         }
         
+        // Cache visited pages and their time of visit
+        const pageVisitCache = {};
+        
+        // Auto refresh data if page was visited more than 1 minute ago
+        function checkPageRefresh() {
+            const currentPath = window.location.pathname;
+            const now = new Date().getTime();
+            
+            if (pageVisitCache[currentPath]) {
+                const lastVisit = pageVisitCache[currentPath];
+                const timeDiff = now - lastVisit;
+                
+                // If it's been more than 1 minute since last visit, refresh the page
+                if (timeDiff > 60000) { // 60000 ms = 1 minute
+                    console.log('Refreshing page data...');
+                    window.location.reload();
+                }
+            }
+            
+            // Update cache with current visit time
+            pageVisitCache[currentPath] = now;
+        }
+        
         // Update status initially and every 30 seconds
         document.addEventListener('DOMContentLoaded', function() {
             updateConnectionStatus();
             setInterval(updateConnectionStatus, 30000);
-        });
+            
+            // Check for page refresh needs
+            checkPageRefresh();
+            
+            // Add event listeners to navigation links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', function() {
+                    // Mark the current time as the last time we visited the current page
+                    pageVisitCache[window.location.pathname] = new Date().getTime();
+                });
+            });}
     </script>
 </body>
 </html>

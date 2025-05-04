@@ -17,4 +17,5 @@ dependencies = [
     "matplotlib>=3.10.1",
     "openai>=1.77.0",
     "trafilatura>=2.0.0",
+    "flask-wtf>=1.2.2",
 ]
