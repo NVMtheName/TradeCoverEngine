@@ -654,6 +654,10 @@ class APIConnector:
         Returns:
             dict: Options chain data
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            return self._generate_mock_options_chain(symbol, expiry_date)
+            
         try:
             if self.provider == 'alpaca':
                 # Alpaca doesn't have a direct options chain API
@@ -923,6 +927,17 @@ class APIConnector:
         Returns:
             float: Current price or None if error
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            # Use the same hash technique for consistency with other mock data
+            import hashlib
+            symbol_hash = int(hashlib.md5(symbol.encode()).hexdigest(), 16) % 10000
+            base_price = 50 + (symbol_hash % 200)  # Base price between $50 and $250
+            
+            # Add a small random variation
+            current_price = base_price * (1 + (np.random.random() * 0.01 - 0.005))
+            return round(current_price, 2)
+        
         try:
             if self.provider == 'alpaca':
                 response = self.session.get(
@@ -1001,6 +1016,17 @@ class APIConnector:
         Returns:
             dict: Order response with success status
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            logger.info(f"Simulating order placement (simulation mode): {order_details}")
+            import uuid
+            order_id = str(uuid.uuid4())[:8]
+            return {
+                'success': True,
+                'order_id': order_id,
+                'message': 'Order placed successfully (simulation mode)'
+            }
+            
         try:
             if self.provider == 'alpaca':
                 response = self.session.post(
@@ -1105,6 +1131,50 @@ class APIConnector:
         Returns:
             list: Open positions
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            logger.info("Generating mock positions data (simulation mode)")
+            # Generate some realistic positions for testing
+            symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'V']
+            positions = []
+            
+            # Use a subset of symbols
+            import random
+            random.seed(42)  # For consistent testing results
+            active_symbols = random.sample(symbols, min(5, len(symbols)))
+            
+            for symbol in active_symbols:
+                # Create a hash for consistent pricing
+                import hashlib
+                symbol_hash = int(hashlib.md5(symbol.encode()).hexdigest(), 16) % 10000
+                base_price = 50 + (symbol_hash % 200)  # Base price between $50 and $250
+                
+                # Quantity between 10 and 100 shares, based on symbol hash
+                quantity = 10 + (symbol_hash % 90)
+                
+                # Entry price slightly different than current price
+                entry_price = base_price * 0.95  # Bought 5% lower on average
+                
+                # Current market price with tiny random variation
+                current_price = base_price * (1 + (np.random.random() - 0.5) * 0.01)
+                
+                # Calculate other values
+                market_value = current_price * quantity
+                unrealized_pl = (current_price - entry_price) * quantity
+                unrealized_plpc = (current_price - entry_price) / entry_price * 100
+                
+                positions.append({
+                    'symbol': symbol,
+                    'quantity': quantity,
+                    'avg_entry_price': round(entry_price, 2),
+                    'current_price': round(current_price, 2),
+                    'market_value': round(market_value, 2),
+                    'unrealized_pl': round(unrealized_pl, 2),
+                    'unrealized_plpc': round(unrealized_plpc, 2)  # Already in percentage
+                })
+            
+            return positions
+            
         try:
             if self.provider == 'alpaca':
                 response = self.session.get(f"{self.base_url}/v2/positions")
@@ -1262,6 +1332,11 @@ class APIConnector:
         Returns:
             dict: Dates and equity values
         """
+        # If forced simulation mode is enabled, always use simulated data
+        if self.force_simulation:
+            logger.info("Generating mock equity history data (simulation mode)")
+            return self._generate_mock_equity_history(days)
+            
         try:
             if self.provider == 'alpaca':
                 end_date = datetime.now()
@@ -1338,6 +1413,190 @@ class APIConnector:
         return {
             'dates': dates,
             'equity': equity
+        }
+        
+    def _generate_mock_stock_data(self, symbol, days):
+        """Generate realistic looking mock stock data for simulation mode
+        
+        Args:
+            symbol (str): Stock symbol
+            days (int): Number of days of historical data
+            
+        Returns:
+            dict: Mock historical price data
+        """
+        logger.info(f"Generating mock stock data for {symbol} (simulation mode)")
+        
+        # Create list of business days (excluding weekends)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        date_list = []
+        current_date = start_date
+        while current_date <= end_date:
+            if current_date.weekday() < 5:  # 0-4 are Monday to Friday
+                date_list.append(current_date)
+            current_date += timedelta(days=1)
+        
+        # Generate artificial prices based on symbol hash for consistency
+        # This creates different but consistent price patterns for different symbols
+        import hashlib
+        symbol_hash = int(hashlib.md5(symbol.encode()).hexdigest(), 16) % 10000
+        base_price = 50 + (symbol_hash % 200)  # Base price between $50 and $250
+        
+        # Create random price movements with some trend
+        trend = 0.001 * (symbol_hash % 20 - 10)  # Slight up or down trend
+        
+        prices = []
+        price = base_price
+        for _ in range(len(date_list)):
+            # Random daily fluctuation + slight trend
+            change = (np.random.random() - 0.5) * base_price * 0.03 + price * trend
+            price += change
+            prices.append(max(0.01, price))  # Ensure price is positive
+        
+        # Generate volumes (higher for more expensive stocks)
+        volumes = [int(np.random.normal(base_price * 50000, base_price * 10000)) for _ in range(len(date_list))]
+        volumes = [max(1000, vol) for vol in volumes]  # Ensure positive volume
+        
+        # Format dates as strings
+        formatted_dates = [d.strftime('%Y-%m-%d') for d in date_list]
+        
+        return {
+            'dates': formatted_dates,
+            'prices': prices,
+            'volumes': volumes
+        }
+        
+    def _generate_mock_options_chain(self, symbol, expiry_date=None):
+        """Generate realistic looking mock options chain for simulation mode
+        
+        Args:
+            symbol (str): Stock symbol
+            expiry_date (str, optional): Options expiry date (YYYY-MM-DD)
+            
+        Returns:
+            dict: Mock options chain data with calls and puts
+        """
+        logger.info(f"Generating mock options chain data for {symbol} (simulation mode)")
+        
+        # First get a "current price" for this symbol to maintain consistency
+        # We use the same hash technique as in _generate_mock_stock_data
+        import hashlib
+        symbol_hash = int(hashlib.md5(symbol.encode()).hexdigest(), 16) % 10000
+        current_price = 50 + (symbol_hash % 200)  # Base price between $50 and $250
+        
+        # Set a default expiry date if none provided
+        if not expiry_date:
+            future_date = datetime.now() + timedelta(days=30)  # Default to ~1 month out
+            expiry_date = future_date.strftime('%Y-%m-%d')
+            
+        # Create multiple expiry dates 
+        expiry_dates = []
+        base_date = datetime.now()
+        for days_offset in [7, 14, 30, 60, 90]:  # Weekly, bi-weekly, monthly options
+            expiry = (base_date + timedelta(days=days_offset)).strftime('%Y-%m-%d')
+            expiry_dates.append(expiry)
+        
+        # Keep only the requested expiry date if specified
+        if expiry_date:
+            expiry_dates = [exp for exp in expiry_dates if exp == expiry_date] or expiry_dates
+        
+        calls = []
+        puts = []
+        
+        # Generate call options at various strike prices
+        for expiry in expiry_dates:
+            # Days to expiration affects pricing
+            days_to_expiry = (datetime.strptime(expiry, '%Y-%m-%d') - datetime.now()).days
+            time_factor = days_to_expiry / 365.0  # Time in years
+            
+            # Basic volatility based on symbol hash for consistency
+            base_iv = 0.2 + (symbol_hash % 10) / 100.0  # Implied volatility 20%-30%
+            
+            # Create strikes from 80% to 120% of current price
+            for pct in range(80, 121, 5):  # 80, 85, 90, ... 120
+                strike = round(current_price * pct / 100, 2)
+                
+                # Option pricing factors
+                otm_pct = (strike - current_price) / current_price  # How far out-of-the-money
+                iv = base_iv + abs(otm_pct) * 0.5  # Volatility smile effect
+                
+                # Simplified Black-Scholes approximation 
+                intrinsic = max(0, current_price - strike)
+                time_value = current_price * iv * np.sqrt(time_factor)
+                
+                # Apply discount for OTM options
+                if strike > current_price:
+                    time_value *= np.exp(-otm_pct * 2)
+                
+                option_price = intrinsic + time_value
+                
+                # Add a small bid-ask spread
+                bid = round(option_price * 0.95, 2)
+                ask = round(option_price * 1.05, 2)
+                
+                # Calculate greeks (approximate)
+                if strike > current_price:  # OTM
+                    delta = 0.5 * np.exp(-otm_pct * 3)
+                else:  # ITM
+                    delta = 0.5 + 0.5 * (1 - np.exp(-(current_price - strike) / current_price * 3))
+                    
+                theta = -option_price * 0.1 / max(days_to_expiry, 1)  # Higher theta closer to expiry
+                
+                calls.append({
+                    'strike': strike,
+                    'expiry': expiry,
+                    'bid': bid,
+                    'ask': ask,
+                    'delta': round(delta, 3),
+                    'theta': round(theta, 3),
+                    'iv': round(iv * 100, 2)  # Convert to percentage
+                })
+        
+        # Generate put options using similar logic
+        for expiry in expiry_dates:
+            days_to_expiry = (datetime.strptime(expiry, '%Y-%m-%d') - datetime.now()).days
+            time_factor = days_to_expiry / 365.0
+            base_iv = 0.2 + (symbol_hash % 10) / 100.0
+            
+            for pct in range(80, 121, 5):
+                strike = round(current_price * pct / 100, 2)
+                
+                otm_pct = (current_price - strike) / current_price  # OTM for puts is reversed
+                iv = base_iv + abs(otm_pct) * 0.5
+                
+                intrinsic = max(0, strike - current_price)
+                time_value = current_price * iv * np.sqrt(time_factor)
+                
+                if strike < current_price:
+                    time_value *= np.exp(-abs(otm_pct) * 2)
+                
+                option_price = intrinsic + time_value
+                
+                bid = round(option_price * 0.95, 2)
+                ask = round(option_price * 1.05, 2)
+                
+                if strike < current_price:  # OTM
+                    delta = -0.5 * np.exp(-abs(otm_pct) * 3)
+                else:  # ITM
+                    delta = -0.5 - 0.5 * (1 - np.exp(-(strike - current_price) / current_price * 3))
+                    
+                theta = -option_price * 0.1 / max(days_to_expiry, 1)
+                
+                puts.append({
+                    'strike': strike,
+                    'expiry': expiry,
+                    'bid': bid,
+                    'ask': ask,
+                    'delta': round(delta, 3),
+                    'theta': round(theta, 3),
+                    'iv': round(iv * 100, 2)
+                })
+        
+        return {
+            'calls': calls,
+            'puts': puts
         }
     
     def get_monthly_returns(self, months=12):
