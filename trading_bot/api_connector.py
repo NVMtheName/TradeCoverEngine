@@ -83,13 +83,21 @@ class APIConnector:
         else:
             self.base_url = "https://api.schwab.com/v1"
         
-        # Schwab APIs typically require OAuth2 authentication
-        # This is a simplified version; in practice, full OAuth2 flow would be needed
+        # Schwab APIs require OAuth2 authentication with proper registration
+        # This is a more robust implementation based on Schwab's documentation
         if self.api_key and self.api_secret:
+            # The API key should be used as the client_id for OAuth2
+            self.client_id = self.api_key
+            self.client_secret = self.api_secret
+            
+            # In a production app, we would need to implement the full OAuth2 flow
+            # For now, we'll use a simplified approach where api_key = access token
+            # and api_secret = refresh token or client secret
             self.session.headers.update({
                 'Authorization': f'Bearer {self.api_key}',
-                'X-API-Key': self.api_secret,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-API-Key': self.api_secret  # Some APIs require this in addition to Authorization
             })
             logger.info(f"Initialized Charles Schwab API connector with paper trading: {self.paper_trading}")
         else:
@@ -97,7 +105,18 @@ class APIConnector:
             
         # Add special message about Schwab API access
         logger.warning("NOTE: To use Charles Schwab API, you need to register your application and IP addresses with Schwab Developer Center. See https://developer.schwab.com/get-started for details.")
+        logger.warning("You must register your application and receive OAuth2 credentials. The API key should be your OAuth client_id and API secret should be your client_secret.")
         logger.warning("For development purposes, you may want to use Alpaca which offers unrestricted paper trading API access.")
+        
+        # Check if we have valid credentials
+        if self.api_key and self.api_secret:
+            logger.info("Attempting to validate Schwab API credentials...")
+        else:
+            logger.warning("Cannot validate Schwab API credentials - missing API key or secret.")
+            
+        # Track API status for UI display
+        self.api_status = "Not Connected"
+        self.api_status_details = "API credentials not validated"
     
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""

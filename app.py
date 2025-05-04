@@ -321,6 +321,46 @@ def stock_data(symbol):
         logger.error(f"Error retrieving stock data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/test-connection', methods=['POST'])
+def test_api_connection():
+    """Test the API connection with provided credentials"""
+    try:
+        # Get connection parameters from POST request
+        data = request.json
+        provider = data.get('provider', 'alpaca')
+        api_key = data.get('api_key', '')
+        api_secret = data.get('api_secret', '')
+        is_paper_trading = data.get('is_paper_trading', True)
+        
+        # Create a temporary connector to test the connection
+        temp_connector = APIConnector(
+            provider=provider,
+            api_key=api_key,
+            api_secret=api_secret,
+            paper_trading=is_paper_trading
+        )
+        
+        # Test the connection
+        is_connected = temp_connector.is_connected()
+        
+        if is_connected:
+            return jsonify({
+                'success': True,
+                'message': 'API connection successful! Your credentials are valid.'
+            })
+        else:
+            # Get additional details from the connector
+            return jsonify({
+                'success': False,
+                'message': 'Could not connect to the API. Please check your credentials and try again.'
+            })
+    except Exception as e:
+        logger.error(f"Error testing API connection: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
 # Error handling
 @app.errorhandler(404)
 def page_not_found(e):
