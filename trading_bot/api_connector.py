@@ -14,7 +14,7 @@ class APIConnector:
     Supports multiple providers with a common interface.
     """
     
-    def __init__(self, provider='alpaca', api_key=None, api_secret=None, paper_trading=True):
+    def __init__(self, provider='alpaca', api_key=None, api_secret=None, paper_trading=True, force_simulation=False):
         """
         Initialize the API connector.
         
@@ -23,11 +23,13 @@ class APIConnector:
             api_key (str): API key for authentication
             api_secret (str): API secret for authentication
             paper_trading (bool): Whether to use paper trading mode
+            force_simulation (bool): Whether to force simulation mode (no API calls)
         """
         self.provider = provider
         self.api_key = api_key or os.environ.get(f"{provider.upper()}_API_KEY")
         self.api_secret = api_secret or os.environ.get(f"{provider.upper()}_API_SECRET")
         self.paper_trading = paper_trading
+        self.force_simulation = force_simulation
         self.session = None
         self.base_url = None
         
