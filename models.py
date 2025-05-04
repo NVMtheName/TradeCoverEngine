@@ -23,6 +23,7 @@ class Settings(db.Model):
     api_key = db.Column(db.String(100))
     api_secret = db.Column(db.String(100))
     is_paper_trading = db.Column(db.Boolean, default=True)
+    force_simulation_mode = db.Column(db.Boolean, default=False)  # Force simulation mode (no API needed)
     
     # Strategy settings
     risk_level = db.Column(db.String(20), default='moderate')  # Options: conservative, moderate, aggressive
@@ -31,6 +32,11 @@ class Settings(db.Model):
     stop_loss_percentage = db.Column(db.Float, default=3.0)
     options_expiry_days = db.Column(db.Integer, default=30)  # Target days until expiration
     enabled_strategies = db.Column(db.String(255), default='covered_call')  # Comma-separated list of enabled strategies
+    
+    # Forex specific settings
+    forex_leverage = db.Column(db.Float, default=10.0)  # Leverage for forex trading (10:1)
+    forex_lot_size = db.Column(db.Float, default=0.1)  # Default lot size for forex trades (mini lot)
+    forex_pairs_watchlist = db.Column(db.String(255), default='EUR/USD,GBP/USD,USD/JPY')  # Watchlist of forex pairs
     
     # Last updated timestamp
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

@@ -64,7 +64,14 @@
                                 <input class="form-check-input" type="checkbox" id="is_paper_trading" name="is_paper_trading" 
                                        {% if settings.is_paper_trading %}checked{% endif %}>
                                 <label class="form-check-label" for="is_paper_trading">Use Paper Trading</label>
-                                <div class="form-text">Enable to use paper trading (simulation mode)</div>
+                                <div class="form-text">Enable to use paper trading (real API but with simulated money)</div>
+                            </div>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="force_simulation_mode" name="force_simulation_mode" 
+                                       {% if settings.force_simulation_mode %}checked{% endif %}>
+                                <label class="form-check-label" for="force_simulation_mode">Force Simulation Mode</label>
+                                <div class="form-text">Enable to use completely simulated data (no API connection required)</div>
                             </div>
                             
                             <div class="d-grid gap-2">
@@ -93,6 +100,7 @@
                             <div class="form-group mb-3">
                                 <label class="form-label">Select Strategy</label>
                                 <div class="d-flex flex-wrap strategy-selector">
+                                    <h6 class="w-100 mb-2">Options Strategies</h6>
                                     <div class="form-check form-check-inline me-4 mb-3">
                                         <input class="form-check-input" type="checkbox" id="strategy_covered_call" name="enabled_strategies" value="covered_call" 
                                                {% if 'covered_call' in settings.enabled_strategies %}checked{% endif %}>
@@ -124,6 +132,41 @@
                                                 Iron Condor
                                             </div>
                                             <small class="d-block text-muted">Market-neutral strategy with defined risk</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <h6 class="w-100 mb-2 mt-3">Forex Strategies</h6>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_trend" name="enabled_strategies" value="forex_trend" 
+                                               {% if 'forex_trend' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_trend">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Trend Following
+                                            </div>
+                                            <small class="d-block text-muted">Follow medium-term forex market trends</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_breakout" name="enabled_strategies" value="forex_breakout" 
+                                               {% if 'forex_breakout' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_breakout">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Breakout Trading
+                                            </div>
+                                            <small class="d-block text-muted">Capitalize on forex price breakouts</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_range" name="enabled_strategies" value="forex_range" 
+                                               {% if 'forex_range' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_range">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Range Trading
+                                            </div>
+                                            <small class="d-block text-muted">Trade within established price ranges</small>
                                         </label>
                                     </div>
                                 </div>
@@ -182,6 +225,36 @@
                                     <span>60 days</span>
                                 </div>
                                 <div class="form-text">Preferred time until options expiration</div>
+                            </div>
+                            
+                            <h5 class="border-bottom pb-2 mt-4">Forex Trading Settings</h5>
+                            <div class="form-group mb-3">
+                                <label for="forex_pairs_watchlist" class="form-label">Forex Pairs Watchlist</label>
+                                <input type="text" class="form-control" id="forex_pairs_watchlist" name="forex_pairs_watchlist" 
+                                       value="{{ settings.forex_pairs_watchlist }}">
+                                <div class="form-text">Comma-separated list of forex pairs to trade (e.g., EUR/USD,GBP/USD,USD/JPY)</div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="forex_leverage" class="form-label">Forex Leverage</label>
+                                        <input type="number" class="form-control" id="forex_leverage" name="forex_leverage" 
+                                               value="{{ settings.forex_leverage }}" min="1" max="100" step="1">
+                                        <div class="form-text">Leverage ratio for forex trading (e.g., 10 for 10:1)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="forex_lot_size" class="form-label">Default Lot Size</label>
+                                        <select class="form-select" id="forex_lot_size" name="forex_lot_size">
+                                            <option value="0.01" {% if settings.forex_lot_size == 0.01 %}selected{% endif %}>Micro (0.01)</option>
+                                            <option value="0.1" {% if settings.forex_lot_size == 0.1 %}selected{% endif %}>Mini (0.1)</option>
+                                            <option value="1.0" {% if settings.forex_lot_size == 1.0 %}selected{% endif %}>Standard (1.0)</option>
+                                        </select>
+                                        <div class="form-text">Default trading lot size for forex positions</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         

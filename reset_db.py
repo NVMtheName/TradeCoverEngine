@@ -18,13 +18,18 @@ with app.app_context():
     from models import Settings
     if not Settings.query.first():
         default_settings = Settings(
-            api_provider='alpaca',
+            api_provider='schwab',
             risk_level='moderate',
             max_position_size=5000.0,
             profit_target_percentage=5.0,
             stop_loss_percentage=3.0,
             options_expiry_days=30,
-            enabled_strategies='covered_call'
+            enabled_strategies='covered_call',
+            is_paper_trading=True,
+            force_simulation_mode=True,
+            forex_leverage=10.0,
+            forex_lot_size=0.1,
+            forex_pairs_watchlist='EUR/USD,GBP/USD,USD/JPY'
         )
         db.session.add(default_settings)
         db.session.commit()
