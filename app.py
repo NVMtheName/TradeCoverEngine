@@ -98,7 +98,8 @@ def initialize_app():
                 provider=settings.api_provider,
                 api_key=settings.api_key,
                 api_secret=settings.api_secret,
-                paper_trading=settings.is_paper_trading
+                paper_trading=settings.is_paper_trading,
+                force_simulation=settings.force_simulation_mode
             )
             
             stock_analyzer = StockAnalyzer(api_connector)
@@ -241,11 +242,15 @@ def settings():
             settings.api_key = request.form.get('api_key')
             settings.api_secret = request.form.get('api_secret')
             settings.is_paper_trading = 'is_paper_trading' in request.form
+            settings.force_simulation_mode = 'force_simulation_mode' in request.form
             settings.risk_level = request.form.get('risk_level')
             settings.max_position_size = float(request.form.get('max_position_size'))
             settings.profit_target_percentage = float(request.form.get('profit_target_percentage'))
             settings.stop_loss_percentage = float(request.form.get('stop_loss_percentage'))
             settings.options_expiry_days = int(request.form.get('options_expiry_days'))
+            settings.forex_pairs_watchlist = request.form.get('forex_pairs_watchlist')
+            settings.forex_leverage = float(request.form.get('forex_leverage'))
+            settings.forex_lot_size = float(request.form.get('forex_lot_size'))
             
             # Handle multiple strategy selections
             enabled_strategies = request.form.getlist('enabled_strategies')
@@ -403,7 +408,8 @@ def test_api_connection():
             provider=provider,
             api_key=api_key,
             api_secret=api_secret,
-            paper_trading=is_paper_trading
+            paper_trading=is_paper_trading,
+            force_simulation=data.get('force_simulation_mode', False)
         )
         
         # Test the connection
