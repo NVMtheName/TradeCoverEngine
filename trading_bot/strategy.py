@@ -124,6 +124,12 @@ class CoveredCallStrategy(OptionsStrategy):
             self.strike_min_percentage = 3.0  # Minimum % above current price
             self.best_options_count = 2  # Consider a couple of options
     
+    def select_options(self, stock_price, options_data):
+        """Implementation of abstract method for CoveredCallStrategy"""
+        if not options_data or 'calls' not in options_data:
+            return None
+        return self.select_covered_call(stock_price, options_data['calls'])
+        
     def select_covered_call(self, stock_price, call_options):
         """
         Select the best call option for a covered call strategy.

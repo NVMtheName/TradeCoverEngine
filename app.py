@@ -52,7 +52,7 @@ def load_user(user_id):
 # Import trading bot modules
 from trading_bot.api_connector import APIConnector
 from trading_bot.stock_analyzer import StockAnalyzer
-from trading_bot.strategy import CoveredCallStrategy
+from trading_bot.strategies import CoveredCallStrategy, PutCreditSpreadStrategy, IronCondorStrategy
 from trading_bot.trade_executor import TradeExecutor
 
 # Create API connector instance (to be configured in settings)
@@ -99,12 +99,39 @@ def initialize_app():
             
             stock_analyzer = StockAnalyzer(api_connector)
             
-            strategy = CoveredCallStrategy(
-                risk_level=settings.risk_level,
-                profit_target_percentage=settings.profit_target_percentage,
-                stop_loss_percentage=settings.stop_loss_percentage,
-                options_expiry_days=settings.options_expiry_days
-            )
+            # Create strategies based on enabled_strategies setting
+            enabled_strategies = settings.enabled_strategies.split(',') if settings.enabled_strategies else ['covered_call']
+            
+            # Default to covered call strategy
+            if 'covered_call' in enabled_strategies:
+                strategy = CoveredCallStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
+            elif 'put_credit_spread' in enabled_strategies:
+                strategy = PutCreditSpreadStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
+            elif 'iron_condor' in enabled_strategies:
+                strategy = IronCondorStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
+            else:
+                # Default fallback
+                strategy = CoveredCallStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
             
             trade_executor = TradeExecutor(
                 api_connector=api_connector,
@@ -187,6 +214,13 @@ def settings():
             settings.profit_target_percentage = float(request.form.get('profit_target_percentage'))
             settings.stop_loss_percentage = float(request.form.get('stop_loss_percentage'))
             settings.options_expiry_days = int(request.form.get('options_expiry_days'))
+            
+            # Handle multiple strategy selections
+            enabled_strategies = request.form.getlist('enabled_strategies')
+            if not enabled_strategies:
+                # Default to covered call if nothing selected
+                enabled_strategies = ['covered_call']
+            settings.enabled_strategies = ','.join(enabled_strategies)
             
             db.session.commit()
             
