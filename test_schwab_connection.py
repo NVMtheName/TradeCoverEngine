@@ -13,13 +13,13 @@ from urllib.parse import urlencode
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('schwab_test')
 
-# Constants
-SANDBOX_AUTH_URL = "https://api-sandbox.schwabapi.com/v2/oauth/authorize"
-PRODUCTION_AUTH_URL = "https://api.schwabapi.com/v2/oauth/authorize"
+# Constants - using v1 paths as specified in Schwab documentation
+SANDBOX_AUTH_URL = "https://api-sandbox.schwabapi.com/v1/oauth/authorize"
+PRODUCTION_AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 
 def test_connection(use_sandbox=True):
     """Test connection to Schwab API authorization endpoint"""
-    logger.info(f"Testing connection to Schwab API {('sandbox' if use_sandbox else 'production')} v2 endpoints")
+    logger.info(f"Testing connection to Schwab API {('sandbox' if use_sandbox else 'production')} v1 endpoints")
     
     # Get credentials from environment
     api_key = os.environ.get('SCHWAB_API_KEY')

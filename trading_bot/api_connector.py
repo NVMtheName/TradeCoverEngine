@@ -165,7 +165,7 @@ class APIConnector:
                 'refresh_token': self.refresh_token,
                 'client_id': self.client_id,
                 'client_secret': self.client_secret,
-                'scope': 'openid profile'  # Same scope as original request
+                'scope': 'readonly'  # Same scope as original request per Schwab documentation
             }
             
             # Execute the token refresh request

@@ -962,13 +962,13 @@ def oauth_callback():
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
-                # Use correct token URL format for Schwab Trader API (v2 path structure)
+                # Use correct token URL format for Schwab Trader API (v1 path structure)
                 if settings.is_paper_trading:
-                    token_url = "https://api-sandbox.schwabapi.com/v2/oauth/token"
-                    logger.info("Using Schwab sandbox OAuth token endpoint (v2)")
+                    token_url = "https://api-sandbox.schwabapi.com/v1/oauth/token"
+                    logger.info("Using Schwab sandbox OAuth token endpoint (v1)")
                 else:
-                    token_url = "https://api.schwabapi.com/v2/oauth/token"
-                    logger.info("Using Schwab production OAuth token endpoint (v2)")
+                    token_url = "https://api.schwabapi.com/v1/oauth/token"
+                    logger.info("Using Schwab production OAuth token endpoint (v1)")
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
@@ -1016,7 +1016,7 @@ def oauth_callback():
                     'redirect_uri': redirect_uri,  # Must match the original redirect exactly
                     'client_id': client_id,
                     'client_secret': client_secret,
-                    'scope': 'openid profile'  # Match scopes from authorization request
+                    'scope': 'readonly'  # Match scope from authorization request per Schwab docs
                 }
                 
                 # Log the token exchange request (excluding sensitive data)
