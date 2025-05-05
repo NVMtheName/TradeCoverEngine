@@ -756,10 +756,15 @@ def oauth_initiate():
             else:
                 # Define possible OAuth2 auth URLs for production environment
                 auth_base_urls = [
+                    # Standard OAuth2 patterns
+                    "https://developer.schwab.com/oauth/authorize",  # Direct developer portal
+                    "https://api.schwab.com/oauth/authorize",       # Root domain with OAuth prefix
+                    "https://broker-api.schwab.com/oauth/authorize", # Broker API subdomain
+                    "https://trader-api.schwab.com/oauth/authorize", # Trader API subdomain
+                    # Original patterns we tried
                     "https://api.schwabapi.com/oauth2/authorize",  # Primary URL with OAuth2 prefix
                     "https://api.schwabapi.com/oauth/authorize",   # Original URL with OAuth prefix
-                    "https://schwabapi.com/broker/rest/oauth/authorize",  # From docs example
-                    "https://auth.schwab.com/oauth/authorize"  # Alternative pattern
+                    "https://schwabapi.com/broker/rest/oauth/authorize"  # From docs example
                 ]
                 logger.info("Using Schwab production OAuth2 authorization endpoints - will try multiple patterns")
                 
@@ -811,14 +816,22 @@ def oauth_initiate():
             # For Replit, we can get this from environment variables or generate a proper HTTPS URL
             replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
             
+            # Use both /oauth/callback and /oauth2/callback paths for maximum compatibility
+            # Create a list of potential callback URIs
+            callback_paths = ['/oauth/callback', '/oauth2/callback']
+            
             if replit_domain:
-                # Use the Replit domain for callback
-                exact_redirect_uri = f"https://{replit_domain}/oauth/callback"
-                logger.info(f"Using Replit domain for OAuth callback: {exact_redirect_uri}")
+                # Use the Replit domain for callbacks
+                callback_uris = [f"https://{replit_domain}{path}" for path in callback_paths]
+                # Default to first one
+                exact_redirect_uri = callback_uris[0]
+                logger.info(f"Using Replit domain for OAuth callbacks: {', '.join(callback_uris)}")
             else:
                 # Fallback to app URL with forced HTTPS
-                exact_redirect_uri = f"{app_url}/oauth/callback"
-                logger.info(f"Using generated URL for OAuth callback: {exact_redirect_uri}")
+                callback_uris = [f"{app_url}{path}" for path in callback_paths]
+                # Default to first one
+                exact_redirect_uri = callback_uris[0]
+                logger.info(f"Using generated URLs for OAuth callbacks: {', '.join(callback_uris)}")
             
             # Define authorization parameters with exact values according to Schwab documentation
             # https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements
@@ -1000,6 +1013,7 @@ def oauth_initiate():
         return redirect(url_for('settings'))
 
 @app.route('/oauth/callback')
+@app.route('/oauth2/callback')  # Alternative OAuth2 callback path
 @app.route('/google_login/callback')  # Keep for backward compatibility
 def oauth_callback():
     """Callback endpoint for OAuth2 authorization flow in 3-legged OAuth authentication"""
@@ -1069,10 +1083,15 @@ def oauth_callback():
                 else:
                     # Define possible OAuth2 token URLs for production environment
                     token_urls = [
+                        # Standard OAuth2 patterns
+                        "https://developer.schwab.com/oauth/token",  # Direct developer portal
+                        "https://api.schwab.com/oauth/token",       # Root domain with OAuth prefix
+                        "https://broker-api.schwab.com/oauth/token", # Broker API subdomain
+                        "https://trader-api.schwab.com/oauth/token", # Trader API subdomain
+                        # Original patterns we tried
                         "https://api.schwabapi.com/oauth2/token",  # Primary URL with OAuth2 prefix
                         "https://api.schwabapi.com/oauth/token",   # Original URL with OAuth prefix
-                        "https://schwabapi.com/broker/rest/oauth/token",  # From docs example
-                        "https://auth.schwab.com/oauth/token"  # Alternative pattern
+                        "https://schwabapi.com/broker/rest/oauth/token"  # From docs example
                     ]
                     logger.info("Using Schwab production OAuth2 token endpoints - will try multiple patterns")
                     
@@ -1083,16 +1102,24 @@ def oauth_callback():
                 # This is critical for OAuth to work correctly
                 replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
                 
+                # Determine which callback path was used in the authorization flow
+                callback_path = request.path
+                # Default to /oauth/callback if we can't determine the actual path
+                if not callback_path or callback_path == '/':
+                    callback_path = '/oauth/callback'
+                    
+                logger.info(f"OAuth callback received on path: {callback_path}")
+                
                 if replit_domain:
                     # Use the Replit domain for callback
-                    redirect_uri = f"https://{replit_domain}/oauth/callback"
+                    redirect_uri = f"https://{replit_domain}{callback_path}"
                     logger.info(f"Using Replit domain for OAuth callback: {redirect_uri}")
                 else:
                     # Fallback to using app URL with HTTPS
                     app_url = request.url_root.rstrip('/')
                     if app_url.startswith('http:'):
                         app_url = app_url.replace('http:', 'https:', 1)
-                    redirect_uri = f"{app_url}/oauth/callback"
+                    redirect_uri = f"{app_url}{callback_path}"
                     logger.info(f"Using generated URL for OAuth callback: {redirect_uri}")
                 
                 # Now perform the token exchange
