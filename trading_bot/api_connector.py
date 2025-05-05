@@ -148,6 +148,11 @@ class APIConnector:
                     self.session.headers.update({
                         'Authorization': f'Bearer {self.access_token}'
                     })
+                else:
+                    logger.warning("No access token available for Schwab API - OAuth2 authentication required")
+                    if not self.force_simulation:
+                        logger.warning("Falling back to simulation mode")
+                        self.force_simulation = True
             except Exception as e:
                 logger.error(f"Error retrieving access token: {str(e)}")
         else:
@@ -457,6 +462,47 @@ class APIConnector:
                                 self.api_status = "Authentication Failed"
                                 self.api_status_details = "Token refresh failed"
                                 return False
+                                
+                        # Try to make an authenticated request to check the connection
+                        try:
+                            # Use the accounts endpoint to check authentication
+                            # This is a common endpoint for OAuth2 APIs
+                            account_url = f"{self.base_url}/accounts"
+                            logger.info(f"Testing Schwab API connection with accounts endpoint: {account_url}")
+                            
+                            # Use our authenticated request method to try all auth methods
+                            response = self.make_authenticated_request('get', account_url)
+                            
+                            if response and response.status_code == 200:
+                                self.api_status = "Connected"
+                                self.api_status_details = "OAuth2 authentication successful"
+                                logger.info("Successfully authenticated with Schwab API")
+                                return True
+                            elif response:
+                                # Request was made but returned an error
+                                error_data = {}
+                                try:
+                                    if 'application/json' in response.headers.get('content-type', ''):
+                                        error_data = response.json()
+                                except ValueError:
+                                    error_data = {}
+                                    
+                                error_msg = error_data.get('message', response.text[:100])
+                                self.api_status = "Authentication Error"
+                                self.api_status_details = f"API returned {response.status_code}: {error_msg}"
+                                logger.error(f"Schwab API authentication error: {response.status_code} - {error_msg}")
+                                return False
+                            else:
+                                # No response - likely an exception occurred in all auth methods
+                                self.api_status = "Connection Failed"
+                                self.api_status_details = "Could not connect to API"
+                                logger.error("Failed to connect to Schwab API with any authentication method")
+                                return False
+                        except Exception as e:
+                            self.api_status = "Connection Error"
+                            self.api_status_details = str(e)
+                            logger.error(f"Exception during Schwab API connection test: {str(e)}")
+                            return False
                         
                         # Try to connect to the Schwab API
                         try:

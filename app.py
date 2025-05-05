@@ -743,8 +743,20 @@ def oauth_initiate():
             redirect_uri = url_for('oauth_callback', _external=True)
             
             # Create the authorization URL with appropriate scopes
-            # Scopes: accounts,trading,market_data,profile
-            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts trading market_data profile&state={state}"
+            # Use urllib.parse to properly encode query parameters
+            from urllib.parse import urlencode
+            
+            # Define authorization parameters
+            auth_params = {
+                'response_type': 'code',
+                'client_id': settings.api_key,
+                'redirect_uri': redirect_uri,
+                'scope': 'accounts trading market_data profile',
+                'state': state
+            }
+            
+            # Build the authorization URL
+            auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
             
             logger.info(f"Using Schwab API key: {settings.api_key[:4]}...{settings.api_key[-4:] if len(settings.api_key) > 8 else '****'} for OAuth flow")
             logger.info(f"Redirect URI: {redirect_uri}")
