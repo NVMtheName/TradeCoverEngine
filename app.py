@@ -736,8 +736,13 @@ def oauth_initiate():
             session['oauth_user_id'] = current_user.id
             session['oauth_initiation_time'] = datetime.now().timestamp()
             
-            # Get the base URL based on paper trading setting
-            auth_base_url = "https://api-sandbox.schwab.com/v1/oauth2/authorize" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/authorize"
+            # Get the base URL based on paper trading setting (use the correct format per Schwab API docs)
+            # The correct URL format for Trader API authorization is:
+            # https://api.schwabapi.com/v1/oauth/authorize
+            if settings.is_paper_trading:
+                auth_base_url = "https://api-sandbox.schwabapi.com/v1/oauth/authorize"
+            else:
+                auth_base_url = "https://api.schwabapi.com/v1/oauth/authorize"
             
             # Construct redirect URI for callback
             # Schwab API requirements state the callback URL must use HTTPS
@@ -758,20 +763,21 @@ def oauth_initiate():
             # Note: When using Replit, the URL should already meet these requirements
             redirect_uri = f"{app_url}/oauth/callback"
             
-            # Create the authorization URL with appropriate scopes
-            # Use urllib.parse to properly encode query parameters
-            from urllib.parse import urlencode
+            # For Schwab API, the authorization URL should be simplified to:
+            # https://api.schwabapi.com/v1/oauth/authorize?client_id={CONSUMER_KEY}&redirect_uri={APP_CALLBACK_URL}
+            # This is the format specified in the Schwab API documentation
             
-            # Define authorization parameters
+            # Define authorization parameters - simplified as per Schwab requirements
             auth_params = {
-                'response_type': 'code',
                 'client_id': settings.api_key,
-                'redirect_uri': redirect_uri,
-                'scope': 'accounts trading market_data profile',
-                'state': state
+                'redirect_uri': redirect_uri
             }
             
-            # Build the authorization URL
+            # For debugging
+            logger.info(f"Using simplified Schwab OAuth authorization URL format as specified in API docs")
+            
+            # Build the authorization URL with proper URL encoding
+            from urllib.parse import urlencode
             auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
             
             logger.info(f"Using Schwab API key: {settings.api_key[:4]}...{settings.api_key[-4:] if len(settings.api_key) > 8 else '****'} for OAuth flow")
@@ -918,7 +924,11 @@ def oauth_callback():
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
-                token_url = "https://api-sandbox.schwab.com/v1/oauth2/token" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/token"
+                # Use correct token URL format for Schwab Trader API
+                if settings.is_paper_trading:
+                    token_url = "https://api-sandbox.schwabapi.com/v1/oauth/token"
+                else:
+                    token_url = "https://api.schwabapi.com/v1/oauth/token"
                 
                 # Construct redirect URI for callback
                 # Must match the one used in authorization request exactly

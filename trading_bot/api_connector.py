@@ -336,6 +336,15 @@ class APIConnector:
         Returns:
             list: List of positions
         """
+        return self.get_open_positions()
+        
+    def get_open_positions(self):
+        """
+        Get current open positions from the API.
+        
+        Returns:
+            list: List of open positions
+        """
         try:
             if self.force_simulation:
                 # Return simulated positions
@@ -672,6 +681,164 @@ class APIConnector:
             
         return result
     
+    def get_stock_data(self, symbol):
+        """
+        Get comprehensive stock data for a symbol, including price, volume, and other metrics.
+        
+        Args:
+            symbol (str): Stock symbol
+            
+        Returns:
+            dict: Stock data including current price, day change, volume, and other metrics
+        """
+        try:
+            if self.force_simulation:
+                # Return simulated stock data
+                return self._get_simulated_stock_data(symbol)
+                
+            # Get the current price
+            current_price = self.get_current_price(symbol)
+            
+            # Get historical data for recent performance
+            historical_data = self.get_historical_data(symbol, timeframe='day', limit=5)
+            
+            # Calculate day change
+            if len(historical_data) >= 2:
+                prev_close = historical_data[-2]['close'] if isinstance(historical_data[0], dict) else historical_data.iloc[-2]['close']
+                day_change = current_price - prev_close
+                day_change_pct = (day_change / prev_close) * 100 if prev_close else 0
+            else:
+                day_change = 0.0
+                day_change_pct = 0.0
+            
+            # Build the stock data dictionary
+            stock_data = {
+                'symbol': symbol,
+                'price': current_price,
+                'day_change': day_change,
+                'day_change_pct': day_change_pct,
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            # Add additional data if available from the specific provider
+            if self.provider == 'alpaca':
+                try:
+                    response = self.session.get(
+                        f"{self.base_url}/v2/assets/{symbol}",
+                        headers=self.headers
+                    )
+                    
+                    if response.status_code == 200:
+                        asset_data = response.json()
+                        stock_data['name'] = asset_data.get('name', '')
+                        stock_data['exchange'] = asset_data.get('exchange', '')
+                except Exception as e:
+                    logger.warning(f"Error getting additional asset data for {symbol}: {str(e)}")
+            
+            # Try to get latest quote for volume information
+            try:
+                if self.provider == 'alpaca':
+                    response = self.session.get(
+                        f"{self.data_url}/v2/stocks/{symbol}/quotes/latest",
+                        headers=self.headers
+                    )
+                    
+                    if response.status_code == 200:
+                        quote_data = response.json()
+                        stock_data['ask'] = quote_data.get('quote', {}).get('ap', current_price)
+                        stock_data['bid'] = quote_data.get('quote', {}).get('bp', current_price)
+                        stock_data['ask_size'] = quote_data.get('quote', {}).get('as', 0)
+                        stock_data['bid_size'] = quote_data.get('quote', {}).get('bs', 0)
+                        
+                # Get trade data for volume
+                if self.provider == 'alpaca':
+                    response = self.session.get(
+                        f"{self.data_url}/v2/stocks/{symbol}/trades/latest",
+                        headers=self.headers
+                    )
+                    
+                    if response.status_code == 200:
+                        trade_data = response.json()
+                        stock_data['volume'] = trade_data.get('trade', {}).get('v', 0)
+            except Exception as e:
+                logger.warning(f"Error getting latest quote/trade data for {symbol}: {str(e)}")
+                stock_data['volume'] = 0
+            
+            return stock_data
+            
+        except Exception as e:
+            logger.error(f"Error getting stock data for {symbol}: {str(e)}")
+            # Return basic simulated data as a fallback
+            return self._get_simulated_stock_data(symbol)
+            
+    def _get_simulated_stock_data(self, symbol):
+        """
+        Generate simulated comprehensive stock data for a symbol.
+        
+        Args:
+            symbol (str): Stock symbol
+            
+        Returns:
+            dict: Simulated stock data
+        """
+        # Get a stable but random price based on the symbol
+        import hashlib
+        import random
+        
+        # Use the symbol to seed the random number generator for consistent results
+        symbol_hash = int(hashlib.md5(symbol.encode()).hexdigest(), 16) % 10000
+        random.seed(symbol_hash)
+        
+        base_price = (symbol_hash % 1000) + 10  # Price between $10 and $1010
+        price_variation = random.uniform(-5, 5)  # Daily variation
+        current_price = round(base_price + price_variation, 2)
+        
+        # Generate other realistic metrics
+        day_change = round(price_variation, 2)
+        day_change_pct = round((day_change / base_price) * 100, 2)
+        volume = random.randint(10000, 10000000)
+        
+        # Create company name from symbol
+        words = {
+            'A': 'Advanced', 'B': 'Better', 'C': 'Creative', 'D': 'Dynamic', 'E': 'Efficient',
+            'F': 'Future', 'G': 'Global', 'H': 'Horizon', 'I': 'Innovative', 'J': 'Junction',
+            'K': 'Key', 'L': 'Logical', 'M': 'Modern', 'N': 'Next', 'O': 'Optimal',
+            'P': 'Progressive', 'Q': 'Quality', 'R': 'Reliable', 'S': 'Strategic', 'T': 'Technical',
+            'U': 'Universal', 'V': 'Value', 'W': 'World', 'X': 'Xcellent', 'Y': 'Yield', 'Z': 'Zenith'
+        }
+        
+        suffixes = ['Corp', 'Inc', 'Ltd', 'Group', 'Holdings', 'Technologies', 'Systems', 'Solutions']
+        
+        name_parts = []
+        for char in symbol.upper():
+            if char in words:
+                name_parts.append(words[char])
+        
+        if not name_parts:
+            name_parts = [random.choice(list(words.values()))]
+            
+        company_name = ' '.join(name_parts[:2]) + ' ' + random.choice(suffixes)
+        
+        # Generate realistic bid/ask spread
+        spread = round(current_price * random.uniform(0.0005, 0.002), 2)  # 0.05% to 0.2% spread
+        bid = round(current_price - (spread / 2), 2)
+        ask = round(current_price + (spread / 2), 2)
+        
+        return {
+            'symbol': symbol,
+            'name': company_name,
+            'price': current_price,
+            'day_change': day_change,
+            'day_change_pct': day_change_pct,
+            'volume': volume,
+            'bid': bid,
+            'ask': ask,
+            'bid_size': random.randint(100, 1000),
+            'ask_size': random.randint(100, 1000),
+            'exchange': random.choice(['NYSE', 'NASDAQ', 'AMEX']),
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
     def get_current_price(self, symbol):
         """
         Get the current price for a symbol.
@@ -1704,46 +1871,61 @@ class APIConnector:
         Returns:
             pandas.DataFrame: Account history data
         """
+        return self.get_equity_history(days=90)  # Default to 90 days if dates not specified
+        
+    def get_equity_history(self, days=30):
+        """
+        Get equity history data for specified number of days.
+        
+        Args:
+            days (int): Number of days of history to retrieve
+            
+        Returns:
+            dict: Equity history data with dates and values
+        """
+        # Convert days to date range
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days)
         try:
             if self.force_simulation:
                 # Return simulated account history
-                return self._get_simulated_account_history(start_date, end_date)
+                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             if self.provider == 'alpaca':
                 # Alpaca doesn't have a direct endpoint for account history
                 # We would have to build it from portfolio history or custom track it
                 logger.warning("Alpaca doesn't provide account history directly. Using simulated data.")
-                return self._get_simulated_account_history(start_date, end_date)
+                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             elif self.provider == 'td_ameritrade':
                 # Check if we have a valid access token
                 if not self.access_token:
                     logger.warning("No access token available for TD Ameritrade API")
-                    return self._get_simulated_account_history(start_date, end_date)
+                    return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
                 # TD Ameritrade doesn't provide historical equity curves through the API
                 logger.warning("TD Ameritrade doesn't provide account history directly. Using simulated data.")
-                return self._get_simulated_account_history(start_date, end_date)
+                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             elif self.provider == 'schwab':
                 # Check if we have a valid access token
                 if not self.access_token:
                     logger.warning("No access token available for Schwab API")
-                    return self._get_simulated_account_history(start_date, end_date)
+                    return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
                 # In a real implementation, you would make an API call to Schwab
                 # Since we don't have actual Schwab API docs, we'll simulate a response
                 logger.info("Simulating Schwab account history request")
                 
-                return self._get_simulated_account_history(start_date, end_date)
+                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             else:
                 logger.error(f"Unsupported provider: {self.provider}")
-                return self._get_simulated_account_history(start_date, end_date)
+                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
         except Exception as e:
             logger.error(f"Error getting account history: {str(e)}")
-            return self._get_simulated_account_history(start_date, end_date)
+            return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
             
     def _get_simulated_account_history(self, start_date=None, end_date=None):
         """Generate simulated account history data."""
