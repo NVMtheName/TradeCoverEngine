@@ -101,11 +101,15 @@ class APIConnector:
             self.base_url = "https://api-sandbox.schwabapi.com/broker/rest/v1"
             logger.info("Using Schwab sandbox API endpoints (v1)")
             
-            # Define possible OAuth2 auth URLs (primary first, then fallbacks)
+            # Define OAuth2 auth URLs based on our endpoint testing
             self.oauth_auth_urls = [
-                "https://api-sandbox.schwabapi.com/oauth2/authorize",
-                "https://api-sandbox.schwabapi.com/oauth/authorize",
-                "https://sandbox.schwabapi.com/broker/rest/oauth/authorize"
+                # Primary working sandbox endpoint confirmed by our tests
+                "https://sandbox.schwabapi.com/v1/oauth/authorize",  # The ONLY working sandbox endpoint
+                
+                # Fallback options
+                "https://sandbox.schwabapi.com/oauth2/authorize",
+                "https://sandbox.schwabapi.com/oauth/authorize",
+                "https://api-sandbox.schwabapi.com/oauth/authorize"
             ]
             
             # Define possible OAuth2 token URLs (primary first, then fallbacks)

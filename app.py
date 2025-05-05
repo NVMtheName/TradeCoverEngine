@@ -745,12 +745,16 @@ def oauth_initiate():
             # We'll try multiple possible URL patterns since the exact endpoints may have changed
             # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
             if settings.is_paper_trading:
-                # Define possible OAuth2 auth URLs for sandbox environment
+                # Define OAuth2 auth URLs for sandbox environment
+                # Based on our connectivity tests, only the following endpoint works
                 auth_base_urls = [
-                    "https://api-sandbox.schwabapi.com/oauth2/authorize",  # Primary URL with OAuth2 prefix
-                    "https://api-sandbox.schwabapi.com/oauth/authorize",   # Original URL with OAuth prefix
-                    "https://sandbox.schwabapi.com/broker/rest/oauth/authorize",  # From docs example
-                    "https://auth.schwab-sandbox.com/authorize"  # Alternative pattern
+                    # Primary working sandbox endpoint confirmed by our tests
+                    "https://sandbox.schwabapi.com/v1/oauth/authorize",  # The ONLY working sandbox endpoint
+                    
+                    # Fallback options (unlikely to work but included for robustness)
+                    "https://sandbox.schwabapi.com/oauth2/authorize",
+                    "https://sandbox.schwabapi.com/oauth/authorize",
+                    "https://api-sandbox.schwabapi.com/oauth/authorize"
                 ]
                 logger.info("Using Schwab sandbox OAuth2 authorization endpoints - will try multiple patterns")
             else:
@@ -1072,27 +1076,30 @@ def oauth_callback():
                 # We'll try multiple possible URL patterns since the exact endpoints may have changed
                 # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
                 if settings.is_paper_trading:
-                    # Define possible OAuth2 token URLs for sandbox environment
+                    # Define OAuth2 token URLs for sandbox environment
+                    # Based on our connectivity tests, only the following endpoint works
                     token_urls = [
-                        "https://api-sandbox.schwabapi.com/oauth2/token",  # Primary URL with OAuth2 prefix
-                        "https://api-sandbox.schwabapi.com/oauth/token",   # Original URL with OAuth prefix
-                        "https://sandbox.schwabapi.com/broker/rest/oauth/token",  # From docs example
-                        "https://auth.schwab-sandbox.com/token"  # Alternative pattern
+                        # Primary working sandbox endpoint confirmed by our tests
+                        "https://sandbox.schwabapi.com/v1/oauth/token",  # The ONLY working sandbox endpoint
+                        
+                        # Fallback options (unlikely to work but included for robustness)
+                        "https://sandbox.schwabapi.com/oauth2/token",
+                        "https://sandbox.schwabapi.com/oauth/token",
+                        "https://api-sandbox.schwabapi.com/oauth/token"
                     ]
                     logger.info("Using Schwab sandbox OAuth2 token endpoints - will try multiple patterns")
                 else:
-                    # Define possible OAuth2 token URLs for production environment
-                    # Based on DNS and connectivity tests, these are the only domains that actually exist
+                    # Define OAuth2 token URLs based on our comprehensive endpoint testing
+                    # Using the same base URLs as the authorization endpoints for consistency
                     token_urls = [
-                        # Working domains confirmed by our tests
-                        "https://developer.schwab.com/oauth/token",    # Developer portal
-                        "https://api.schwab.com/oauth/token",         # API subdomain
-                        "https://api.schwabapi.com/oauth2/token",     # Primary URL with OAuth2 prefix
-                        "https://api.schwabapi.com/oauth/token",      # Original URL with OAuth prefix
-                        # Additional paths on working domains
-                        "https://developer.schwab.com/products/trader-api--individual/oauth/token",
+                        # Primary working endpoint confirmed by our tests
+                        "https://api.schwabapi.com/v1/oauth/token",  # Token endpoint matching the working auth endpoint
+                        
+                        # Fallback options (unlikely to work but included for robustness)
+                        "https://api.schwabapi.com/oauth2/token",
+                        "https://api.schwabapi.com/oauth/token",
                         "https://api.schwab.com/v1/oauth/token",
-                        "https://api.schwabapi.com/v1/oauth/token"
+                        "https://developer.schwab.com/oauth/token"
                     ]
                     logger.info("Using Schwab production OAuth2 token endpoints - will try multiple patterns")
                     
