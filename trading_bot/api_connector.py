@@ -181,14 +181,26 @@ class APIConnector:
         """
         Refresh the OAuth2 access token using the refresh token.
         
+        Handles token rotation where the OAuth provider issues a new refresh token
+        with each token refresh. This follows the OAuth 2.0 specification for
+        refresh token rotation (RFC 6749 Section 6).
+        
         Returns:
             bool: True if token was successfully refreshed, False otherwise
+            
+        Note:
+            If the function returns True, the class's access_token and potentially 
+            refresh_token properties will be updated. The caller should save these
+            values to persistent storage if needed.
         """
         if not self.refresh_token or not self.client_id or not self.client_secret:
             logger.error("Cannot refresh token: missing refresh token or client credentials")
             return False
             
         try:
+            # Keep a copy of the old refresh token in case we need to recover
+            old_refresh_token = self.refresh_token
+            
             # Prepare the token refresh request per RFC 6749 Section 6
             refresh_data = {
                 'grant_type': 'refresh_token',
@@ -198,7 +210,8 @@ class APIConnector:
             }
             
             headers = {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
             }
             
             logger.info(f"Attempting to refresh token at {self.token_url}")
@@ -213,36 +226,64 @@ class APIConnector:
                 # Successfully refreshed the token
                 token_data = token_response.json()
                 
-                # Update our tokens
-                self.access_token = token_data.get('access_token')
+                # Update access token
+                new_access_token = token_data.get('access_token')
+                if not new_access_token:
+                    logger.error("OAuth server returned 200 but no access_token found in response")
+                    return False
                 
-                # Not all OAuth2 implementations return a new refresh token
+                self.access_token = new_access_token
+                logger.info(f"Received new access token: {self.access_token[:5]}...")
+                
+                # Handle refresh token rotation if a new one is provided
                 new_refresh_token = token_data.get('refresh_token')
                 if new_refresh_token:
+                    logger.info("Detected refresh token rotation. Updating refresh token.")
                     self.refresh_token = new_refresh_token
+                else:
+                    logger.info("No new refresh token provided, continuing to use existing refresh token")
                     
                 # Update token expiry
                 from datetime import datetime, timedelta
                 expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
                 self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
                 
+                # Get token type - should be 'Bearer' but be flexible
+                token_type = token_data.get('token_type', 'Bearer').title()
+                
                 # Update authorization header
                 self.session.headers.update({
-                    'Authorization': f'Bearer {self.access_token}'
+                    'Authorization': f'{token_type} {self.access_token}'
                 })
                 
-                # Update DB with new tokens if appropriate
-                # This would happen in the Flask app context
-                
+                # Log token information
                 logger.info(f"Successfully refreshed access token. New token expires in {expires_in} seconds")
+                if new_refresh_token:
+                    logger.info(f"Refresh token rotation completed successfully")
+                
                 return True
             else:
                 # Failed to refresh the token
-                error_data = token_response.json() if token_response.headers.get('content-type') == 'application/json' else {}
+                error_data = {}
+                try:
+                    if 'application/json' in token_response.headers.get('content-type', ''):
+                        error_data = token_response.json()
+                except ValueError:
+                    logger.warning("Could not parse error response as JSON")
+                
                 error = error_data.get('error', 'unknown_error')
                 error_description = error_data.get('error_description', token_response.text[:100])
                 
-                logger.error(f"Failed to refresh token: {error} - {error_description}")
+                # Check for specific error types per RFC 6749 Section 5.2
+                if error == 'invalid_grant':
+                    logger.error("Refresh token is invalid or expired. User needs to re-authenticate.")
+                elif error == 'unauthorized_client':
+                    logger.error("This client is not authorized to use the refresh token grant type.")
+                elif error == 'invalid_client':
+                    logger.error("Client authentication failed. Check client credentials.")
+                else:
+                    logger.error(f"Failed to refresh token: {error} - {error_description}")
+                
                 return False
                 
         except Exception as e:
