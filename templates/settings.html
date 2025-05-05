@@ -79,15 +79,39 @@
                                     <i class="fas fa-plug me-2"></i> Test Connection
                                 </button>
                                 
-                                <div class="schwab-oauth-section" style="display: none;">
-                                    <div class="alert alert-info">
-                                        <i class="fas fa-info-circle me-2"></i>
-                                        <strong>Schwab API requires OAuth2 authentication.</strong>
-                                        <p class="mb-0 mt-2">You need to register your application with the Schwab Developer Portal and set up a callback URL:</p>
-                                        <code id="callbackUrl" class="d-block mt-2 mb-2 p-2 bg-dark text-light">Loading...</code>
-                                        <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-primary btn-sm">
-                                            <i class="fas fa-key me-1"></i> Authenticate with Schwab
-                                        </a>
+                                <!-- OAuth Authentication Section -->
+                                <div class="schwab-oauth-section" {% if settings.api_provider != 'schwab' %}style="display: none;"{% endif %}>
+                                    <div class="alert {% if settings.oauth_access_token %}alert-success{% else %}alert-info{% endif %} mt-3">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <i class="fas {% if settings.oauth_access_token %}fa-check-circle{% else %}fa-info-circle{% endif %} me-2"></i>
+                                                <strong>{% if settings.oauth_access_token %}Connected to Schwab API{% else %}Schwab API requires OAuth2 authentication{% endif %}</strong>
+                                            </div>
+                                            {% if settings.oauth_access_token %}
+                                            <span class="badge bg-success">Authenticated</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        {% if settings.oauth_access_token %}
+                                            <p class="mb-1 mt-2">Your account is successfully connected to the Schwab API.</p>
+                                            {% if settings.oauth_token_expiry %}
+                                                <p class="mb-0"><small>Token expires: {{ settings.oauth_token_expiry.strftime('%Y-%m-%d %H:%M:%S') }}</small></p>
+                                            {% endif %}
+                                            <div class="mt-2">
+                                                <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-sync-alt me-1"></i> Refresh Connection
+                                                </a>
+                                            </div>
+                                        {% else %}
+                                            <p class="mb-0 mt-2">To use the Schwab trading API, you need to authenticate your account.</p>
+                                            <p class="mb-2">The callback URL to register in your Schwab Developer Portal:</p>
+                                            <code id="callbackUrl" class="d-block mt-2 mb-3 p-2 bg-dark text-light">{{ url_for('oauth_callback', _external=True) }}</code>
+                                            <div class="d-grid">
+                                                <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-primary">
+                                                    <i class="fas fa-key me-1"></i> Connect with Schwab
+                                                </a>
+                                            </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -438,18 +462,38 @@
             alert.className = `alert ${alertClass} mt-3`;
             alert.innerHTML = `<i class="fas ${icon} me-2"></i> ${data.message}`;
             
-            if (!data.success && provider === 'schwab') {
-                // Add additional information for Schwab users
-                const moreInfo = document.createElement('div');
-                moreInfo.className = 'mt-2 small';
-                moreInfo.innerHTML = `
-                    <strong>Note for Schwab API:</strong><br>
-                    You must register your application with the Schwab Developer Center and 
-                    whitelist your IP addresses. Visit <a href="https://developer.schwab.com/get-started" 
-                    target="_blank">Schwab Developer Portal</a> for details.<br>
-                    For testing purposes, you may want to switch to Alpaca which offers unrestricted paper trading API access.
-                `;
-                alert.appendChild(moreInfo);
+            if (provider === 'schwab') {
+                if (!data.success) {
+                    // Add additional information for Schwab users
+                    const moreInfo = document.createElement('div');
+                    moreInfo.className = 'mt-2 small';
+                    moreInfo.innerHTML = `
+                        <strong>Note for Schwab API:</strong><br>
+                        You must complete the OAuth2 authentication process by clicking "Connect with Schwab" below.<br>
+                        Make sure your application is registered with the Schwab Developer Center and 
+                        your IP address is whitelisted. Visit <a href="https://developer.schwab.com/get-started" 
+                        target="_blank">Schwab Developer Portal</a> for details.
+                    `;
+                    alert.appendChild(moreInfo);
+                    
+                    // Highlight the OAuth section
+                    const oauthSection = document.querySelector('.schwab-oauth-section');
+                    if (oauthSection) {
+                        oauthSection.classList.add('border', 'border-primary', 'p-2', 'rounded');
+                        setTimeout(() => {
+                            oauthSection.classList.remove('border', 'border-primary', 'p-2', 'rounded');
+                        }, 3000);
+                    }
+                } else {
+                    // API key/secret check passed, but remind about OAuth
+                    const oauthReminder = document.createElement('div');
+                    oauthReminder.className = 'mt-2 small text-success';
+                    oauthReminder.innerHTML = `
+                        <strong>API credentials valid!</strong> Remember that Schwab also requires OAuth2 authentication 
+                        to access trading functionality. Make sure to complete the "Connect with Schwab" step below.
+                    `;
+                    alert.appendChild(oauthReminder);
+                }
             }
             
             btn.parentNode.appendChild(alert);
