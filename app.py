@@ -740,7 +740,23 @@ def oauth_initiate():
             auth_base_url = "https://api-sandbox.schwab.com/v1/oauth2/authorize" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/authorize"
             
             # Construct redirect URI for callback
-            redirect_uri = url_for('oauth_callback', _external=True)
+            # Schwab API requirements state the callback URL must use HTTPS
+            # Special handling for production URLs (no port number) vs development URLs
+            app_url = request.url_root.rstrip('/')
+            
+            # Force HTTPS as required by Schwab
+            if app_url.startswith('http:'):
+                app_url = app_url.replace('http:', 'https:', 1)
+                
+            # Per Schwab requirements, callback URLs must:
+            # 1. Use HTTPS protocol
+            # 2. Have a valid SSL/TLS certificate
+            # 3. Not use localhost or 127.0.0.1
+            # 4. Not include special characters except those allowed in RFC 3986
+            # 5. Not include ports unless it's a sandbox environment
+            
+            # Note: When using Replit, the URL should already meet these requirements
+            redirect_uri = f"{app_url}/oauth/callback"
             
             # Create the authorization URL with appropriate scopes
             # Use urllib.parse to properly encode query parameters
@@ -776,6 +792,7 @@ def oauth_initiate():
         return redirect(url_for('settings'))
 
 @app.route('/oauth/callback')
+@app.route('/google_login/callback')  # Keep for backward compatibility
 def oauth_callback():
     """Callback endpoint for OAuth2 authorization flow in 3-legged OAuth authentication"""
     try:
@@ -832,8 +849,16 @@ def oauth_callback():
                 # Get the token endpoint based on paper trading setting
                 token_url = "https://api-sandbox.schwab.com/v1/oauth2/token" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/token"
                 
-                # Construct redirect URI for callback (must match the one used in authorization request)
-                redirect_uri = url_for('oauth_callback', _external=True)
+                # Construct redirect URI for callback
+                # Must match the one used in authorization request exactly
+                app_url = request.url_root.rstrip('/')
+                
+                # Force HTTPS as required by Schwab
+                if app_url.startswith('http:'):
+                    app_url = app_url.replace('http:', 'https:', 1)
+                    
+                # Use the same redirect URI construction as in the initiation function
+                redirect_uri = f"{app_url}/oauth/callback"
                 
                 # Now perform the token exchange
                 import requests

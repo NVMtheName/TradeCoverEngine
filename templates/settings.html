@@ -104,8 +104,31 @@
                                             </div>
                                         {% else %}
                                             <p class="mb-0 mt-2">To use the Schwab trading API, you need to authenticate your account.</p>
-                                            <p class="mb-2">The callback URL to register in your Schwab Developer Portal:</p>
-                                            <code id="callbackUrl" class="d-block mt-2 mb-3 p-2 bg-dark text-light">{{ url_for('oauth_callback', _external=True) }}</code>
+                                            
+                                            <!-- Schwab Callback URL Requirements -->
+                                            <div class="card mt-2 mb-3 border-info">
+                                                <div class="card-header bg-info text-white">
+                                                    <i class="fas fa-info-circle me-1"></i> Schwab API Callback URL Requirements
+                                                </div>
+                                                <div class="card-body">
+                                                    <p class="small mb-1">Register this exact callback URL in your Schwab Developer Portal:</p>
+                                                    <code id="callbackUrl" class="d-block my-2 p-2 bg-dark text-light">{{ request.url_root.rstrip('/').replace('http:', 'https:', 1) }}/oauth/callback</code>
+                                                    
+                                                    <p class="small mb-1 mt-3">Schwab callback requirements:</p>
+                                                    <ul class="small">
+                                                        <li>Must use HTTPS protocol</li>
+                                                        <li>Must have a valid SSL/TLS certificate</li>
+                                                        <li>Cannot use localhost or 127.0.0.1</li>
+                                                        <li>Cannot include special characters except those allowed in RFC 3986</li>
+                                                        <li>For production, should not include ports</li>
+                                                    </ul>
+                                                    
+                                                    <p class="small"><a href="https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements" target="_blank">
+                                                        <i class="fas fa-external-link-alt me-1"></i> Schwab Developer Documentation
+                                                    </a></p>
+                                                </div>
+                                            </div>
+                                            
                                             <div class="d-grid">
                                                 <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-primary">
                                                     <i class="fas fa-key me-1"></i> Connect with Schwab
