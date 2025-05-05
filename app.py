@@ -751,47 +751,12 @@ def oauth_initiate():
             session['oauth_user_id'] = current_user.id
             session['oauth_initiation_time'] = datetime.now().timestamp()
             
-            # Set OAuth 2.0 endpoints based on environment
-            # We'll try multiple possible URL patterns since the exact endpoints may have changed
-            # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
-            if settings.is_paper_trading:
-                # Define OAuth2 auth URLs for sandbox environment
-                # Based on our connectivity tests, only the following endpoint works
-                auth_base_urls = [
-                    # Primary working sandbox endpoint confirmed by our tests
-                    "https://sandbox.schwabapi.com/v1/oauth/authorize",  # The ONLY working sandbox endpoint
-                    
-                    # Fallback options (unlikely to work but included for robustness)
-                    "https://sandbox.schwabapi.com/oauth2/authorize",
-                    "https://sandbox.schwabapi.com/oauth/authorize",
-                    "https://api-sandbox.schwabapi.com/oauth/authorize"
-                ]
-                logger.info("Using Schwab sandbox OAuth2 authorization endpoints - will try multiple patterns")
-            else:
-                # Define OAuth2 auth URLs based on our comprehensive endpoint testing
-                # Only the following endpoints were confirmed working with Schwab API
-                auth_base_urls = [
-                    # Primary working endpoint confirmed by our tests
-                    "https://api.schwabapi.com/v1/oauth/authorize",  # The ONLY working endpoint
-                    
-                    # Fallback options (unlikely to work but included for robustness)
-                    "https://api.schwabapi.com/oauth2/authorize",
-                    "https://api.schwabapi.com/oauth/authorize",
-                    "https://api.schwab.com/v1/oauth/authorize",
-                    "https://developer.schwab.com/oauth/authorize"
-                ]
-                logger.info("Using Schwab production OAuth2 authorization endpoints - will try multiple patterns")
-                
-            # Start with the first URL pattern
-            auth_base_url = auth_base_urls[0]
-                
-            # Note: Based on our connection tests, the API may respond with a 500 status code during testing
-            # This is expected and documented in the Schwab API documentation
-            # A 500 status from the /oauth/authorize endpoint doesn't necessarily indicate an error
+            # We'll use our server-side proxy to avoid CORS issues
+            # Our proxy handles the direct communication with Schwab API from our server
+            logger.info("Using server-side proxy for Schwab API OAuth authorization")
             
             # Construct redirect URI for callback
             # Schwab API requirements state the callback URL must use HTTPS
-            # Special handling for production URLs (no port number) vs development URLs
             app_url = request.url_root.rstrip('/')
             
             # Force HTTPS as required by Schwab
@@ -805,12 +770,8 @@ def oauth_initiate():
             # 4. Not include special characters except those allowed in RFC 3986
             # 5. Not include ports unless it's a sandbox environment
             
-            # Note: When using Replit, the URL should already meet these requirements
-            redirect_uri = f"{app_url}/oauth/callback"
-            
-            # For Schwab API, the authorization URL should be simplified to:
-            # https://api.schwabapi.com/v1/oauth/authorize?client_id={CONSUMER_KEY}&redirect_uri={APP_CALLBACK_URL}
-            # This is the format specified in the Schwab API documentation
+            # Define callback path
+            callback_path = '/oauth/callback'
             
             # Use client ID from settings or environment variables
             env_api_key = os.environ.get("SCHWAB_API_KEY")
@@ -870,149 +831,44 @@ def oauth_initiate():
             # Show the OAuth authorization URL for debugging purposes
             flash(f"Using provided credentials for Schwab OAuth authorization", 'info')
             
-            # Test the authorization URL before redirecting
+            # Build URL for our proxy endpoint
             try:
-                import requests
-                from urllib.parse import urlparse, parse_qs
+                # Set up sandbox/production mode in the session for the proxy
+                session['oauth_is_sandbox'] = settings.is_paper_trading
                 
-                # Test connectivity to Schwab's auth endpoints with a HEAD request
-                # This won't initiate the actual OAuth flow but will check if the endpoints are accessible
-                logger.info("Testing connection to Schwab's OAuth authorization endpoints - will try multiple patterns")
+                # Build a URL to our proxy endpoint instead of directly to Schwab
+                # This avoids CORS issues since our server will make the request
+                proxy_url = url_for('schwab_proxy.proxy_oauth_authorize', _external=True)
                 
-                # Try each auth URL pattern until one works
-                working_url = None
-                successful_response = None
-                correlation_id = None
-                test_url_index = 0
-
-                for test_url_index, test_base_url in enumerate(auth_base_urls):
-                    try:
-                        # Build test URL with parameters
-                        test_auth_url = f"{test_base_url}?{urlencode(auth_params)}"
-                        parsed_url = urlparse(test_auth_url)
-                        base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                        
-                        logger.info(f"Testing URL pattern {test_url_index+1}/{len(auth_base_urls)}: {base_auth_url}")
-                        
-                        # Make a test request to check connectivity
-                        test_response = requests.head(
-                            base_auth_url,
-                            headers={"User-Agent": "Trading Bot OAuth Test"},
-                            timeout=10
-                        )
-                        
-                        logger.info(f"Endpoint test status: {test_response.status_code}")
-                        
-                        # Special handling for Schwab API - 500 error is expected in the authorization flow
-                        # This is documented in the Schwab API documentation
-                        if test_response.status_code == 500 and 'Schwab-Client-CorrelId' in test_response.headers:
-                            # This is a normal response from Schwab API and indicates we found the right endpoint
-                            correlation_id = test_response.headers.get('Schwab-Client-CorrelId')
-                            logger.info(f"Received 500 status with Schwab correlation ID {correlation_id} - this is a valid response")
-                            working_url = test_base_url
-                            successful_response = test_response
-                            break
-                        elif test_response.status_code >= 200 and test_response.status_code < 400:
-                            # Good response, found a working URL
-                            working_url = test_base_url
-                            successful_response = test_response
-                            logger.info(f"Found working endpoint: {working_url}")
-                            break
-                        elif test_response.status_code == 404:
-                            # This endpoint doesn't exist, try the next one
-                            logger.warning(f"Endpoint not found (404): {base_auth_url}")
-                            continue
-                        else:
-                            # Other error, but might indicate the URL exists, so save it as a potential fallback
-                            if not working_url:
-                                working_url = test_base_url
-                                successful_response = test_response
-                    except Exception as e:
-                        logger.warning(f"Error testing endpoint {base_auth_url}: {str(e)}")
-                        continue
+                # Add required OAuth parameters
+                from urllib.parse import urlencode
+                auth_params = {
+                    'client_id': client_id,
+                    'redirect_uri': exact_redirect_uri,
+                    'response_type': 'code',  # Required for authorization code flow
+                    'scope': 'trading',       # Required scope for Schwab API
+                    'state': state            # CSRF protection token
+                }
                 
-                # If we found a working URL, use it; otherwise use the original first URL
-                if working_url:
-                    auth_base_url = working_url
-                    auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
-                    logger.info(f"Using working URL: {auth_base_url}")
-                    # Use the last test response for further processing
-                    test_response = successful_response
-                else:
-                    logger.warning("No working endpoints found, using the default URL")
-                    # Use the original URL and response
-                    parsed_url = urlparse(auth_url)
-                    base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                    
-                    # Make a test request to check connectivity with the default URL
-                    test_response = requests.head(
-                        base_auth_url,
-                        headers={"User-Agent": "Trading Bot OAuth Test"},
-                        timeout=10
-                    )
-                    
-                logger.info(f"Final Schwab authorization endpoint test status: {test_response.status_code}")
+                # Construct the full proxy URL with parameters
+                proxy_auth_url = f"{proxy_url}?{urlencode(auth_params)}"
                 
-                # Special handling for Schwab API - 500 error is expected in the authorization flow
-                # This is documented in the Schwab API documentation and confirmed in our tests
-                if test_response.status_code == 500 and 'Schwab-Client-CorrelId' in test_response.headers:
-                    # This is a normal response from Schwab API
-                    logger.info("Received 500 status with Schwab-Client-CorrelId header - this is a normal response")
-                    logger.info(f"Schwab correlation ID: {test_response.headers.get('Schwab-Client-CorrelId')}")
-                    
-                    # Connection test successful despite 500 status, proceed with the redirect
-                    logger.info(f"Redirecting user to Schwab OAuth authorization page: {auth_url}")
-                    return redirect(auth_url)
-                    
-                elif test_response.status_code >= 400:
-                    # There's an issue with the connection to Schwab's API
-                    error_message = f"Error connecting to Schwab's authorization endpoint. Status code: {test_response.status_code}."
-                    logger.error(error_message)
-                    
-                    # Check if this is a production endpoint and we're getting access denied
-                    # If so, try the sandbox environment as a fallback
-                    if not settings.is_paper_trading and test_response.status_code == 403:
-                        logger.info("Access denied to production API - trying sandbox environment instead")
-                        flash("Production API access denied - switching to sandbox environment for testing", 'warning')
-                        
-                        # Switch to sandbox environment
-                        settings.is_paper_trading = True
-                        db.session.commit()
-                        
-                        # Reinitialize flow with sandbox environment
-                        return redirect(url_for('oauth_initiate', provider='schwab'))
-                    
-                    # Provide comprehensive troubleshooting information
-                    flash_message = f"""
-                    <strong>Connection to Schwab API failed</strong><br>
-                    Status code: {test_response.status_code}<br>
-                    Possible causes:
-                    <ul>
-                        <li>Your API key may not be fully activated</li>
-                        <li>Replit's IP address may need to be whitelisted in your Schwab developer account</li>
-                        <li>Your application may require review by Schwab before accessing the API</li>
-                        <li>You may be using a production key with sandbox URL or vice versa</li>
-                    </ul>
-                    <p>Contact Schwab Developer Support with this information for assistance.</p>
-                    """
-                    
-                    flash(flash_message, 'danger')
-                    
-                    # Add diagnostic info to the session for display on the settings page
-                    session['oauth_diagnostics'] = {
-                        'status_code': test_response.status_code,
-                        'target_url': base_auth_url,
-                        'headers': dict(test_response.headers),
-                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'api_provider': 'schwab',
-                        'environment': 'sandbox' if settings.is_paper_trading else 'production'
-                    }
-                    
-                    return redirect(url_for('settings'))
+                # Log the proxy URL we're using
+                logger.info(f"Using proxy to connect to Schwab API: {proxy_url}")
+                logger.info(f"Using Schwab API key: {client_id[:4]}...{client_id[-4:]} for OAuth flow")
+                logger.info(f"Redirect URI: {exact_redirect_uri}")
                 
-                # Connection test successful, proceed with the redirect
-                logger.info(f"Redirecting user to Schwab OAuth authorization page: {auth_url}")
-                return redirect(auth_url)
+                # Store additional session data for the proxy to use
+                session['oauth_proxy_enabled'] = True
+                session['oauth_client_id'] = client_id
+                session['oauth_redirect_uri'] = exact_redirect_uri
+                
+                # Show informative message to user
+                flash("Connecting to Schwab API through secure proxy...", 'info')
+                
+                # Redirect to our proxy endpoint
+                logger.info(f"Redirecting user to proxy OAuth authorization endpoint: {proxy_auth_url}")
+                return redirect(proxy_auth_url)
                 
             except Exception as e:
                 logger.error(f"Error testing connection to Schwab authorization endpoint: {str(e)}")
