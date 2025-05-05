@@ -731,7 +731,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        if self.refresh_access_token():
                             return self.get_orders(status)  # Try again with new token
                     return self._get_simulated_orders(status)
                     

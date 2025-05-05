@@ -772,14 +772,32 @@ def oauth_initiate():
             # https://api.schwabapi.com/v1/oauth/authorize?client_id={CONSUMER_KEY}&redirect_uri={APP_CALLBACK_URL}
             # This is the format specified in the Schwab API documentation
             
-            # Use the exact client ID and redirect URI provided
-            client_id = "kLgjtAjFRFsdGjm3ZUuGTWPEHmVtwQoX"
-            # Save the client ID in settings for future use
-            settings.api_key = client_id
-            db.session.commit()
+            # Use client ID from settings or environment variables
+            env_api_key = os.environ.get("SCHWAB_API_KEY")
+            client_id = settings.api_key or env_api_key
             
-            # Use the exact redirect URI provided
-            exact_redirect_uri = "https://7352034c-d741-4cbf-9bc5-d05d9b93e49d-00-z4porq8bem36.picard.replit.dev/oauth/callback"
+            if not client_id:
+                logger.error("Missing client ID for OAuth authorization")
+                flash("Authentication failed: Missing API Key. Please configure it in settings.", 'danger')
+                return redirect(url_for('settings'))
+                
+            # Save the client ID in settings for future use if it came from environment variables
+            if settings.api_key != client_id:
+                settings.api_key = client_id
+                db.session.commit()
+            
+            # Define the callback URL for OAuth integration
+            # For Replit, we can get this from environment variables or generate a proper HTTPS URL
+            replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+            
+            if replit_domain:
+                # Use the Replit domain for callback
+                exact_redirect_uri = f"https://{replit_domain}/oauth/callback"
+                logger.info(f"Using Replit domain for OAuth callback: {exact_redirect_uri}")
+            else:
+                # Fallback to app URL with forced HTTPS
+                exact_redirect_uri = f"{app_url}/oauth/callback"
+                logger.info(f"Using generated URL for OAuth callback: {exact_redirect_uri}")
             
             # Define authorization parameters with exact values according to Schwab documentation
             # https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements
@@ -950,14 +968,33 @@ def oauth_callback():
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
-                redirect_uri = "https://7352034c-d741-4cbf-9bc5-d05d9b93e49d-00-z4porq8bem36.picard.replit.dev/oauth/callback"
+                replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+                
+                if replit_domain:
+                    # Use the Replit domain for callback
+                    redirect_uri = f"https://{replit_domain}/oauth/callback"
+                    logger.info(f"Using Replit domain for OAuth callback: {redirect_uri}")
+                else:
+                    # Fallback to using app URL with HTTPS
+                    app_url = request.url_root.rstrip('/')
+                    if app_url.startswith('http:'):
+                        app_url = app_url.replace('http:', 'https:', 1)
+                    redirect_uri = f"{app_url}/oauth/callback"
+                    logger.info(f"Using generated URL for OAuth callback: {redirect_uri}")
                 
                 # Now perform the token exchange
                 import requests
                 from urllib.parse import urlencode
                 
                 # Prepare the token request payload (RFC 6749 Section 4.1.3)
-                client_id = "kLgjtAjFRFsdGjm3ZUuGTWPEHmVtwQoX"
+                # Use client ID from settings or environment variables
+                env_api_key = os.environ.get("SCHWAB_API_KEY")
+                client_id = settings.api_key or env_api_key
+                
+                if not client_id:
+                    logger.error("Missing client ID for token exchange")
+                    flash("Authentication failed: Missing API Key. Please configure it in settings.", 'danger')
+                    return redirect(url_for('settings'))
                 # Use the client secret from settings or environment variables
                 env_api_secret = os.environ.get("SCHWAB_API_SECRET")
                 client_secret = settings.api_secret or env_api_secret
