@@ -303,6 +303,71 @@ class AutoTrader:
             except Exception as e:
                 logger.error(f"Error processing trade: {str(e)}")
     
+    def create_strategy(self, strategy_name, risk_level, profit_target_percentage, stop_loss_percentage, options_expiry_days):
+        """
+        Factory method to create a strategy object based on strategy name.
+        
+        Args:
+            strategy_name (str): Name of the strategy to create
+            risk_level (str): Risk level for the strategy
+            profit_target_percentage (float): Target profit percentage
+            stop_loss_percentage (float): Stop loss percentage
+            options_expiry_days (int): Target days to expiration
+            
+        Returns:
+            object: Strategy object or None if strategy not supported
+        """
+        strategies = {
+            'covered_call': lambda: CoveredCallStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days
+            ),
+            'put_credit_spread': lambda: PutCreditSpreadStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days
+            ),
+            'iron_condor': lambda: IronCondorStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days
+            ),
+            'iron_butterfly': lambda: IronButterflyStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days
+            ),
+            'calendar_spread': lambda: CalendarSpreadStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days,
+                option_type='call'  # Default to call options
+            ),
+            'diagonal_spread': lambda: DiagonalSpreadStrategy(
+                risk_level=risk_level,
+                profit_target_percentage=profit_target_percentage,
+                stop_loss_percentage=stop_loss_percentage,
+                options_expiry_days=options_expiry_days,
+                option_type='call'  # Default to call options
+            ),
+        }
+        
+        if strategy_name in strategies:
+            try:
+                return strategies[strategy_name]()
+            except Exception as e:
+                logger.error(f"Error creating strategy '{strategy_name}': {str(e)}")
+                return None
+        else:
+            logger.warning(f"Unsupported strategy: {strategy_name}")
+            return None
+
     def _execute_ai_trade(self, opportunity):
         """
         Execute a trade based on AI recommendation.
@@ -316,8 +381,9 @@ class AutoTrader:
         # Determine the right strategy based on AI analysis
         trade_result = None
         
-        # Check for covered call opportunity (default strategy)
+        # Get recommended strategy or use default (covered_call)
         if recommendation:
+            strategy_name = recommendation.get('strategy', 'covered_call')
             strike_price = recommendation.get('strike_price')
             days_to_expiration = recommendation.get('days_to_expiration')
             
@@ -336,14 +402,52 @@ class AutoTrader:
             if quantity < 100:
                 logger.warning(f"Position size too small for {symbol} at price {current_price}")
                 return
+                
+            # Get options chain for more complex strategies
+            options_data = None
+            if strategy_name != 'covered_call':
+                options_data = self.api_connector.get_options_chain(symbol)
+                if not options_data:
+                    logger.error(f"Could not retrieve options chain for {symbol}")
+                    return
             
-            # Execute covered call
-            trade_result = self.trade_executor.execute_covered_call(
-                symbol=symbol,
-                quantity=quantity,
-                strike_price=strike_price,
-                expiry_date=None  # Let the trade executor find the expiry date
+            # Create the appropriate strategy using our factory
+            strategy = self.create_strategy(
+                strategy_name=strategy_name,
+                risk_level=recommendation.get('risk_level', 'moderate'),
+                profit_target_percentage=float(recommendation.get('profit_target_percentage', 5.0)),
+                stop_loss_percentage=float(recommendation.get('stop_loss_percentage', 3.0)),
+                options_expiry_days=int(recommendation.get('days_to_expiration', 30))
             )
+            
+            if not strategy:
+                logger.error(f"Could not create strategy '{strategy_name}' for {symbol}")
+                return
+            
+            if strategy_name == 'covered_call':
+                # Execute covered call using the existing method
+                trade_result = self.trade_executor.execute_covered_call(
+                    symbol=symbol,
+                    quantity=quantity,
+                    strike_price=strike_price,
+                    expiry_date=None  # Let the trade executor find the expiry date
+                )
+            else:
+                # For more complex strategies, select options and execute
+                selected_options = strategy.select_options(current_price, options_data)
+                
+                if not selected_options:
+                    logger.error(f"Could not select suitable options for {strategy_name} on {symbol}")
+                    return
+                
+                # Execute the strategy through trade executor
+                # Note: In a real implementation, we would expand trade_executor to handle more strategy types
+                trade_result = self.trade_executor.execute_options_strategy(
+                    symbol=symbol,
+                    strategy_name=strategy_name,
+                    selected_options=selected_options,
+                    quantity=quantity
+                )
         
         # Log the result
         if trade_result and trade_result.get('success'):
@@ -370,16 +474,23 @@ class AutoTrader:
                 if not current_price:
                     continue
                 
-                # Get strategy for this position type
-                strategy = None
-                if position.get('position_type') == 'covered_call':
-                    from trading_bot.strategy import CoveredCallStrategy
-                    strategy = CoveredCallStrategy()
-                elif position.get('position_type') == 'put_credit_spread':
-                    from trading_bot.strategies import PutCreditSpreadStrategy
-                    strategy = PutCreditSpreadStrategy()
+                # Get strategy for this position type using the factory
+                position_type = position.get('position_type', 'covered_call')
+                risk_level = position.get('risk_level', 'moderate')
+                profit_target = position.get('profit_target_percentage', 5.0)
+                stop_loss = position.get('stop_loss_percentage', 3.0)
+                expiry_days = position.get('options_expiry_days', 30)
+                
+                strategy = self.create_strategy(
+                    strategy_name=position_type,
+                    risk_level=risk_level,
+                    profit_target_percentage=profit_target,
+                    stop_loss_percentage=stop_loss,
+                    options_expiry_days=expiry_days
+                )
                 
                 if not strategy:
+                    logger.warning(f"Could not create strategy for position type: {position_type}")
                     continue
                 
                 # Check if adjustment is needed
