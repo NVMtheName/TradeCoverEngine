@@ -76,10 +76,18 @@ def initialize_app():
         # Create database tables
         db.create_all()
         
-        # Initialize trading components with default settings
+        # Initialize trading components with user-specific settings when possible
         try:
-            # Get settings from database or use defaults
-            settings = Settings.query.first()
+            # Try to get user-specific settings if a user is logged in
+            if current_user and current_user.is_authenticated:
+                settings = Settings.query.filter_by(user_id=current_user.id).first()
+                user_specific = True
+                logger.info(f"Using settings for user ID: {current_user.id}")
+            else:
+                # Fall back to default settings
+                settings = Settings.query.first()
+                user_specific = False
+                logger.info("Using default settings (no user logged in)")
             
             if not settings:
                 # Create default settings
@@ -97,13 +105,21 @@ def initialize_app():
                 db.session.add(settings)
                 db.session.commit()
             
+            # Check OAuth tokens if using Schwab
             # Initialize trading components
+            use_sim_mode = settings.force_simulation_mode
+            logger.info(f"Initializing API connector with force_simulation={use_sim_mode}")
+            
+            # Get SCHWAB API credentials from environment if available
+            api_key = settings.api_key or os.environ.get("SCHWAB_API_KEY")
+            api_secret = settings.api_secret or os.environ.get("SCHWAB_API_SECRET")
+            
             api_connector = APIConnector(
                 provider=settings.api_provider,
-                api_key=settings.api_key,
-                api_secret=settings.api_secret,
+                api_key=api_key,
+                api_secret=api_secret,
                 paper_trading=settings.is_paper_trading,
-                force_simulation=settings.force_simulation_mode
+                force_simulation=use_sim_mode
             )
             
             stock_analyzer = StockAnalyzer(api_connector)
@@ -183,9 +199,26 @@ def initialize_app():
 # Initialize app before first request
 @app.before_request
 def before_request():
-    # Initialize app if components are not set up
+    # Initialize app if components are not set up, or on login/logout events
     global api_connector, ai_advisor, auto_trader
-    if api_connector is None:
+    
+    # Check for initialization or login/logout event
+    user_id = current_user.id if current_user.is_authenticated else None
+    
+    # Get previous request path from session
+    prev_path = session.get('prev_path', '')
+    curr_path = request.path
+    
+    # Store current path for next request
+    session['prev_path'] = curr_path
+    
+    # Detect login/logout events
+    login_event = prev_path == '/login' and curr_path != '/login'
+    logout_event = prev_path == '/logout'
+    
+    # Reinitialize if needed
+    if api_connector is None or login_event or logout_event:
+        logger.info(f"Reinitializing API connector for user_id={user_id} (login_event={login_event}, logout_event={logout_event})")
         initialize_app()
 
 # Routes
@@ -526,12 +559,16 @@ def oauth_initiate():
     """Start OAuth2 authorization flow"""
     try:
         provider = request.args.get('provider', 'schwab')
-        settings = Settings.query.first()
+        
+        # Use current user's settings if available
+        if current_user.is_authenticated:
+            settings = Settings.query.filter_by(user_id=current_user.id).first()
+            logger.info(f"Initiating OAuth flow for user ID: {current_user.id}")
+        else:
+            settings = Settings.query.first()
+            logger.info("Initiating OAuth flow with default settings (no user logged in)")
         
         if provider == 'schwab':
-            # In a real implementation, you would redirect to Schwab's authorization URL
-            # with necessary parameters (client_id, redirect_uri, scope, etc.)
-            
             # Generate a state parameter to prevent CSRF attacks
             state = os.urandom(16).hex()
             session['oauth_state'] = state
@@ -542,13 +579,20 @@ def oauth_initiate():
             # Construct redirect URI for callback
             redirect_uri = url_for('oauth_callback', _external=True)
             
-            # For demonstration purposes, show what the URL would be
-            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts&state={state}"
+            # Create the real authorization URL
+            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts,trading&state={state}"
             
-            flash(f"For a real Schwab API integration, you would be redirected to authorize the application. The callback URL to register in your Schwab Developer account would be: {redirect_uri}", 'info')
+            logger.info(f"Using Schwab API key: {settings.api_key[:4]}...{settings.api_key[-4:] if len(settings.api_key) > 8 else '****'} for OAuth flow")
+            logger.info(f"Redirect URI: {redirect_uri}")
             
-            # In a real implementation with valid credentials, you would redirect here:
-            # return redirect(auth_url)
+            # Show the callback URL for configuration purposes
+            flash(f"The callback URL to register in your Schwab Developer account is: {redirect_uri}", 'info')
+            
+            # For now, we'll still display the link rather than redirect
+            # until the user has properly registered the callback URL
+            flash(f"<a href='{auth_url}' class='alert-link'>Click here to authorize with Schwab</a>", 'info')
+            
+            return redirect(url_for('settings'))
             
             return redirect(url_for('settings'))
         else:
@@ -567,8 +611,13 @@ def oauth_callback():
         code = request.args.get('code')
         state = request.args.get('state')
         
-        # Get the stored settings
-        settings = Settings.query.first()
+        # Get the settings for the current user if logged in
+        if current_user.is_authenticated:
+            settings = Settings.query.filter_by(user_id=current_user.id).first()
+            logger.info(f"Processing OAuth callback for user ID: {current_user.id}")
+        else:
+            settings = Settings.query.first()
+            logger.info("Processing OAuth callback with default settings (no user logged in)")
         
         if not code:
             flash('Authentication failed: No authorization code received.', 'danger')
@@ -581,9 +630,8 @@ def oauth_callback():
             
         if settings.api_provider == 'schwab':
             # Exchange the authorization code for an access token
-            # In a real implementation, you would make a POST request to Schwab's token endpoint
             try:
-                # This is a simplified version; in production, you'd make a real API call
+                # Log the receipt of the authorization code (truncated for security)
                 logger.info(f"Received OAuth2 authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
@@ -592,34 +640,52 @@ def oauth_callback():
                 # Construct redirect URI for callback (must match the one used in authorization request)
                 redirect_uri = url_for('oauth_callback', _external=True)
                 
-                # In a real implementation, you would make this request:
-                # token_response = requests.post(
-                #     token_url,
-                #     data={
-                #         'grant_type': 'authorization_code',
-                #         'code': code,
-                #         'client_id': settings.api_key,
-                #         'client_secret': settings.api_secret,
-                #         'redirect_uri': redirect_uri
-                #     },
-                #     headers={'Content-Type': 'application/x-www-form-urlencoded'}
-                # )
-                # 
-                # if token_response.status_code == 200:
-                #     token_data = token_response.json()
-                #     access_token = token_data.get('access_token')
-                #     refresh_token = token_data.get('refresh_token')
-                #     expires_in = token_data.get('expires_in')
-                # 
-                #     # Store tokens in the database
-                #     settings.api_key = access_token  # Store access token as API key
-                #     settings.api_secret = refresh_token  # Store refresh token as API secret
-                #     db.session.commit()
+                # Now perform the actual token exchange
+                import requests
+                token_response = requests.post(
+                    token_url,
+                    data={
+                        'grant_type': 'authorization_code',
+                        'code': code,
+                        'client_id': settings.api_key,
+                        'client_secret': settings.api_secret,
+                        'redirect_uri': redirect_uri
+                    },
+                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                )
                 
-                # Store the authorization code in the session (temporary)
-                session['schwab_auth_code'] = code
+                logger.info(f"Token exchange response status: {token_response.status_code}")
                 
-                flash('Authorization code received. In a production app, this would be exchanged for an access token.', 'info')
+                if token_response.status_code == 200:
+                    token_data = token_response.json()
+                    access_token = token_data.get('access_token')
+                    refresh_token = token_data.get('refresh_token')
+                    expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                    
+                    # Store tokens securely
+                    from datetime import timedelta
+                    settings.oauth_access_token = access_token
+                    settings.oauth_refresh_token = refresh_token
+                    settings.oauth_token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                    
+                    # Turn off simulation mode now that we have real tokens
+                    settings.force_simulation_mode = False
+                    
+                    db.session.commit()
+                    
+                    # Store the authorization code in the session temporarily
+                    session['schwab_auth_code'] = code
+                    
+                    # Reinitialize the app with the new tokens
+                    initialize_app()
+                    
+                    flash('Successfully authenticated with Schwab API!', 'success')
+                else:
+                    # Failed to exchange code for tokens
+                    error_info = token_response.text[:100]  # Truncate long error messages
+                    logger.error(f"Failed to exchange authorization code for tokens: {error_info}")
+                    flash(f"Failed to authenticate with Schwab: {error_info}", 'danger')
+            
             except Exception as e:
                 logger.error(f"Error in OAuth2 flow: {str(e)}")
                 flash(f"Error in authentication flow: {str(e)}", 'danger')
