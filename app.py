@@ -958,9 +958,14 @@ def oauth_callback():
                 
                 # Prepare the token request payload (RFC 6749 Section 4.1.3)
                 client_id = "kLgjtAjFRFsdGjm3ZUuGTWPEHmVtwQoX"
-                # For Schwab API, you should talk to your account representative to get the client secret
-                # For testing purposes, we'll use a placeholder value
-                client_secret = settings.api_secret or "YOUR_API_SECRET"
+                # Use the client secret from settings or environment variables
+                env_api_secret = os.environ.get("SCHWAB_API_SECRET")
+                client_secret = settings.api_secret or env_api_secret
+                
+                if not client_secret:
+                    logger.error("Missing client secret for token exchange")
+                    flash("Authentication failed: Missing API secret. Please configure it in settings.", 'danger')
+                    return redirect(url_for('settings'))
                 
                 # Prepare token payload according to Schwab's documentation
                 # https://developer.schwab.com/user-guides/apis-and-apps/oauth-restart-vs-refresh-token

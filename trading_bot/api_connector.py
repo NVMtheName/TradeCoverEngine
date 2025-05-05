@@ -93,9 +93,11 @@ class APIConnector:
         # Set base URLs
         if self.paper_trading:
             self.base_url = "https://api-sandbox.schwabapi.com/v1"
+            self.auth_url = "https://api-sandbox.schwabapi.com/v1/oauth"
             logger.info("Using Schwab sandbox API endpoints")
         else:
             self.base_url = "https://api.schwabapi.com/v1"
+            self.auth_url = "https://api.schwabapi.com/v1/oauth"
             
         # Set API headers (no authorization yet - will be added after OAuth flow)
         self.headers = {
@@ -106,11 +108,116 @@ class APIConnector:
         self.client_id = self.api_key  # Schwab uses client_id/client_secret terminology
         self.client_secret = self.api_secret
         
+        # Initialize token-related attributes
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expiry = None
+        
         # Truncate for logging
         display_client_id = f"{self.client_id[:4]}...{self.client_id[-4:]}" if self.client_id and len(self.client_id) > 8 else "None"
         
         logger.info(f"Initialized Charles Schwab API connector with client ID: {display_client_id}")
         logger.info(f"Paper trading mode: {self.paper_trading}")
+        
+    def is_token_expired(self):
+        """Check if the access token has expired.
+        
+        Returns:
+            bool: True if token is expired or about to expire, False otherwise
+        """
+        if not self.token_expiry:
+            return True
+            
+        # Consider token expired if less than 5 minutes remaining
+        from datetime import datetime, timedelta
+        buffer_time = timedelta(minutes=5)
+        return datetime.now() + buffer_time >= self.token_expiry
+    
+    def refresh_access_token(self):
+        """Refresh the access token using the refresh token.
+        Follows the OAuth 2.0 refresh token flow as specified by Schwab API.
+        
+        Returns:
+            bool: True if token was successfully refreshed, False otherwise
+        """
+        if not self.refresh_token:
+            logger.warning("No refresh token available for token refresh")
+            return False
+            
+        if not self.client_id or not self.client_secret:
+            logger.warning("Missing client credentials for token refresh")
+            return False
+            
+        try:
+            from datetime import datetime, timedelta
+            
+            # Get the token endpoint URL based on environment
+            token_url = f"{self.auth_url}/token"
+                
+            # Prepare token refresh request based on Schwab API docs
+            token_payload = {
+                'grant_type': 'refresh_token',
+                'refresh_token': self.refresh_token,
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,
+                'scope': 'openid profile'  # Same scope as original request
+            }
+            
+            # Execute the token refresh request
+            logger.info(f"Refreshing access token at {token_url}")
+            
+            token_response = self.session.post(
+                token_url,
+                data=token_payload,
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json'
+                },
+                timeout=15  # Longer timeout for token operations
+            )
+            
+            logger.info(f"Token refresh response status: {token_response.status_code}")
+            
+            if token_response.status_code == 200:
+                # Process successful token response
+                token_data = token_response.json()
+                
+                # Extract and save token data
+                self.access_token = token_data.get('access_token')
+                new_refresh_token = token_data.get('refresh_token')  # May or may not be provided
+                expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                
+                # Update refresh token if a new one was provided
+                if new_refresh_token:
+                    self.refresh_token = new_refresh_token
+                    
+                # Update token expiry
+                self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                
+                # Update authorization header
+                token_type = token_data.get('token_type', 'Bearer')
+                self.session.headers.update({
+                    'Authorization': f'{token_type} {self.access_token}'
+                })
+                
+                logger.info(f"Successfully refreshed access token, expires in {expires_in} seconds")
+                return True
+            else:
+                # Handle error response
+                try:
+                    error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
+                except ValueError:
+                    error_content = {}
+                    
+                error_type = error_content.get('error', 'server_error')
+                error_desc = error_content.get('error_description', token_response.text[:100])
+                
+                logger.error(f"Token refresh error: {error_type} - {error_desc}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error refreshing access token: {str(e)}")
+            return False
         
     def is_connected(self):
         """Check if the API connection is working and return connection status.
