@@ -744,14 +744,16 @@ def oauth_initiate():
             # Get the base URL based on paper trading setting (use the correct format per Schwab API docs)
             # The correct URL for Trader API authorization
             # https://api.schwabapi.com/v1/oauth/authorize (based on connection tests)
+            # Use exact URLs from the Schwab Trader API documentation
+            # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
             if settings.is_paper_trading:
-                auth_base_url = "https://api-sandbox.schwabapi.com/v1/oauth/authorize"
-                logger.info("Using Schwab sandbox OAuth authorization endpoint (v1)")
+                auth_base_url = "https://api-sandbox.schwabapi.com/oauth/authorize"
+                logger.info("Using Schwab sandbox OAuth authorization endpoint (OAuth path)")
             else:
-                auth_base_url = "https://api.schwabapi.com/v1/oauth/authorize"
-                logger.info("Using Schwab production OAuth authorization endpoint (v1)")
+                auth_base_url = "https://api.schwabapi.com/oauth/authorize"
+                logger.info("Using Schwab production OAuth authorization endpoint (OAuth path)")
                 
-            # Note: Based on our connection tests, the API responds with a 500 status code
+            # Note: Based on our connection tests, the API may respond with a 500 status code during testing
             # This is expected and documented in the Schwab API documentation
             # A 500 status from the /oauth/authorize endpoint doesn't necessarily indicate an error
             
@@ -977,13 +979,14 @@ def oauth_callback():
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
-                # Use correct token URL format for Schwab Trader API (v1 path structure)
+                # Use the exact token URL from the Schwab Trader API documentation
+                # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
                 if settings.is_paper_trading:
-                    token_url = "https://api-sandbox.schwabapi.com/v1/oauth/token"
-                    logger.info("Using Schwab sandbox OAuth token endpoint (v1)")
+                    token_url = "https://api-sandbox.schwabapi.com/oauth/token"
+                    logger.info("Using Schwab sandbox OAuth token endpoint")
                 else:
-                    token_url = "https://api.schwabapi.com/v1/oauth/token"
-                    logger.info("Using Schwab production OAuth token endpoint (v1)")
+                    token_url = "https://api.schwabapi.com/oauth/token"
+                    logger.info("Using Schwab production OAuth token endpoint")
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
