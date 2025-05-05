@@ -112,11 +112,15 @@ class APIConnector:
                 "https://api-sandbox.schwabapi.com/oauth/authorize"
             ]
             
-            # Define possible OAuth2 token URLs (primary first, then fallbacks)
+            # Define OAuth2 token URLs based on our endpoint testing
             self.oauth_token_urls = [
-                "https://api-sandbox.schwabapi.com/oauth2/token",
-                "https://api-sandbox.schwabapi.com/oauth/token",
-                "https://sandbox.schwabapi.com/broker/rest/oauth/token"
+                # Primary working sandbox endpoint confirmed by our tests
+                "https://sandbox.schwabapi.com/v1/oauth/token",  # The ONLY working sandbox endpoint
+                
+                # Fallback options
+                "https://sandbox.schwabapi.com/oauth2/token",
+                "https://sandbox.schwabapi.com/oauth/token",
+                "https://api-sandbox.schwabapi.com/oauth/token"
             ]
             
             # Set the primary URLs for initial access
@@ -128,20 +132,28 @@ class APIConnector:
             self.base_url = "https://api.schwabapi.com/broker/rest/v1"
             logger.info("Using Schwab production API endpoints (v1)")
             
-            # Define possible OAuth2 auth URLs (primary first, then fallbacks)
+            # Define OAuth2 auth URLs based on our endpoint testing
             self.oauth_auth_urls = [
+                # Primary working endpoint confirmed by our tests
+                "https://api.schwabapi.com/v1/oauth/authorize",  # The ONLY working endpoint
+                
+                # Fallback options
                 "https://api.schwabapi.com/oauth2/authorize",
                 "https://api.schwabapi.com/oauth/authorize",
-                "https://schwabapi.com/broker/rest/oauth/authorize",
-                "https://auth.schwab.com/oauth/authorize"
+                "https://api.schwab.com/v1/oauth/authorize",
+                "https://developer.schwab.com/oauth/authorize"
             ]
             
-            # Define possible OAuth2 token URLs (primary first, then fallbacks)
+            # Define OAuth2 token URLs based on our endpoint testing
             self.oauth_token_urls = [
+                # Primary working endpoint confirmed by our tests
+                "https://api.schwabapi.com/v1/oauth/token",  # The ONLY working endpoint
+                
+                # Fallback options
                 "https://api.schwabapi.com/oauth2/token",
                 "https://api.schwabapi.com/oauth/token",
-                "https://schwabapi.com/broker/rest/oauth/token",
-                "https://auth.schwab.com/oauth/token"
+                "https://api.schwab.com/v1/oauth/token",
+                "https://developer.schwab.com/oauth/token"
             ]
             
             # Set the primary URLs for initial access
