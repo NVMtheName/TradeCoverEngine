@@ -803,17 +803,19 @@ class IronButterflyStrategy(OptionsStrategy):
         
         # Calculate estimated current value and profit
         # For iron butterfly, maximum profit occurs when price equals center strike at expiration
+        
+        # Calculate distance from center as percentage of wing width
+        distance_pct = abs(current_price - center_strike) / center_strike
+        
         if days_to_expiry <= 0:
             # At expiration
-            if abs(current_price - center_strike) < 0.01:  # At or very near center strike
+            if distance_pct < 0.01:  # At or very near center strike
                 current_value = 0
             else:
                 # Calculate intrinsic value at expiration
                 current_value = min(abs(current_price - center_strike), max(position.get('put_wing_width', 0), position.get('call_wing_width', 0)))
         else:
             # Before expiration - simplified model
-            # Distance from center as percentage of wing width
-            distance_pct = abs(current_price - center_strike) / center_strike
             time_factor = min(1.0, days_to_expiry / 30)
             
             if distance_pct < 0.01:  # Very close to center strike
@@ -921,6 +923,734 @@ class IronButterflyStrategy(OptionsStrategy):
         
         return None
         
+class CalendarSpreadStrategy(OptionsStrategy):
+    """
+    Implements a Calendar Spread options strategy.
+    This strategy involves buying a longer-term option and selling a shorter-term option
+    at the same strike price. It profits from time decay while minimizing directional risk.
+    Calendar spreads can be constructed with either calls or puts.
+    """
+    
+    def __init__(self, risk_level='moderate', profit_target_percentage=5.0, 
+                 stop_loss_percentage=3.0, options_expiry_days=30, option_type='call'):
+        """
+        Initialize the calendar spread strategy.
+        
+        Args:
+            option_type (str): Type of options to use - 'call' or 'put'
+        """
+        super().__init__(risk_level, profit_target_percentage, stop_loss_percentage, options_expiry_days)
+        self.option_type = option_type.lower()
+        if self.option_type not in ['call', 'put']:
+            logger.warning(f"Invalid option type '{option_type}' for calendar spread. Using 'call'.")
+            self.option_type = 'call'
+            
+        logger.info(f"Initialized {self.option_type} calendar spread strategy with risk level: {risk_level}")
+    
+    def _configure_risk_parameters(self):
+        """Configure strategy parameters based on the selected risk level"""
+        if self.risk_level == 'conservative':
+            # Conservative: Further OTM calendar spreads
+            self.target_delta = 0.35 if self.option_type == 'call' else -0.35  # Target delta
+            self.delta_tolerance = 0.15  # How close to target delta
+            self.short_term_days = 15   # Target days until expiration for short option
+            self.long_term_days = 45    # Target days until expiration for long option
+            self.days_between_expiries = 30  # Target difference between expiries
+            self.premium_min_percentage = 15.0  # Short premium should be at least this % of long premium
+        
+        elif self.risk_level == 'aggressive':
+            # Aggressive: More ATM calendar spreads
+            self.target_delta = 0.50 if self.option_type == 'call' else -0.50  # Target delta
+            self.delta_tolerance = 0.20  # How close to target delta
+            self.short_term_days = 7    # Target days until expiration for short option
+            self.long_term_days = 35    # Target days until expiration for long option
+            self.days_between_expiries = 28  # Target difference between expiries
+            self.premium_min_percentage = 25.0  # Short premium should be at least this % of long premium
+        
+        else:  # moderate (default)
+            # Moderate: Balanced approach
+            self.target_delta = 0.40 if self.option_type == 'call' else -0.40  # Target delta
+            self.delta_tolerance = 0.15  # How close to target delta
+            self.short_term_days = 10   # Target days until expiration for short option
+            self.long_term_days = 40    # Target days until expiration for long option
+            self.days_between_expiries = 30  # Target difference between expiries
+            self.premium_min_percentage = 20.0  # Short premium should be at least this % of long premium
+    
+    def select_options(self, stock_price, options_data):
+        """Select the best options for a calendar spread"""
+        if not options_data:
+            logger.warning("No options data available for calendar spread selection")
+            return None
+        
+        # Determine which options to use based on the option type
+        option_key = 'calls' if self.option_type == 'call' else 'puts'
+        if option_key not in options_data or not options_data[option_key]:
+            logger.warning(f"No {self.option_type} options available for calendar spread selection")
+            return None
+        
+        options = options_data[option_key]
+        
+        # Find all available expiry dates
+        all_expiries = set()
+        for option in options:
+            if 'days_to_expiry' in option:
+                all_expiries.add(option.get('days_to_expiry'))
+        
+        # Sort expiries from nearest to furthest
+        sorted_expiries = sorted(all_expiries)
+        if len(sorted_expiries) < 2:
+            logger.warning("Need at least two different expiry dates for calendar spread")
+            return None
+        
+        # Find potential short-term and long-term expiries
+        short_expiries = [exp for exp in sorted_expiries if abs(exp - self.short_term_days) <= 7 and exp >= 5]
+        long_expiries = [exp for exp in sorted_expiries if abs(exp - self.long_term_days) <= 15 and exp > 21]
+        
+        if not short_expiries or not long_expiries:
+            logger.warning("No suitable expiry dates for calendar spread")
+            return None
+        
+        # Group options by expiry
+        options_by_expiry = {}
+        for option in options:
+            expiry = option.get('days_to_expiry')
+            if expiry not in options_by_expiry:
+                options_by_expiry[expiry] = []
+            options_by_expiry[expiry].append(option)
+        
+        suitable_spreads = []
+        
+        # For each potential short and long expiry combination
+        for short_exp in short_expiries:
+            for long_exp in long_expiries:
+                # Skip if they're the same expiry
+                if short_exp >= long_exp:
+                    continue
+                
+                # Check if the time gap between expiries is appropriate
+                gap = long_exp - short_exp
+                if abs(gap - self.days_between_expiries) > 10:  # Allow 10 days deviation
+                    continue
+                
+                short_options = options_by_expiry.get(short_exp, [])
+                long_options = options_by_expiry.get(long_exp, [])
+                
+                # For each potential strike price
+                for long_option in long_options:
+                    strike = long_option.get('strike', 0)
+                    delta = long_option.get('delta', 0)
+                    
+                    # Skip if the delta is too far from our target
+                    if abs(delta - self.target_delta) > self.delta_tolerance:
+                        continue
+                    
+                    # Find corresponding short option with same strike
+                    short_option = None
+                    for opt in short_options:
+                        if opt.get('strike') == strike:
+                            short_option = opt
+                            break
+                    
+                    if not short_option:
+                        continue  # No matching short option at this strike
+                    
+                    # Calculate key metrics
+                    short_premium = short_option.get('premium', 0)
+                    long_premium = long_option.get('premium', 0)
+                    net_debit = long_premium - short_premium
+                    
+                    # Skip if short premium is too small relative to long premium
+                    short_to_long_ratio = (short_premium / long_premium) * 100 if long_premium > 0 else 0
+                    if short_to_long_ratio < self.premium_min_percentage:
+                        continue
+                    
+                    # Calculate theta (time decay) advantage
+                    short_theta = abs(short_option.get('theta', 0.01))
+                    long_theta = abs(long_option.get('theta', 0.005))
+                    theta_advantage = short_theta - long_theta
+                    
+                    # Calculate score for this spread
+                    delta_score = 1 - abs(delta - self.target_delta) / self.delta_tolerance
+                    theta_score = theta_advantage * 100  # Scale up the theta value
+                    expiry_gap_score = 1 - abs(gap - self.days_between_expiries) / 10
+                    premium_ratio_score = short_to_long_ratio / self.premium_min_percentage
+                    
+                    # Different weighting based on risk level
+                    if self.risk_level == 'conservative':
+                        score = delta_score * 0.3 + theta_score * 0.3 + expiry_gap_score * 0.2 + premium_ratio_score * 0.2
+                    elif self.risk_level == 'aggressive':
+                        score = delta_score * 0.2 + theta_score * 0.5 + expiry_gap_score * 0.1 + premium_ratio_score * 0.2
+                    else:  # moderate
+                        score = delta_score * 0.25 + theta_score * 0.4 + expiry_gap_score * 0.15 + premium_ratio_score * 0.2
+                    
+                    # Create spread object
+                    spread = {
+                        'strategy': f"{self.option_type.upper()}_CALENDAR_SPREAD",
+                        'short_option': short_option,
+                        'long_option': long_option,
+                        'strike': strike,
+                        'short_premium': short_premium,
+                        'long_premium': long_premium,
+                        'net_debit': net_debit,
+                        'short_days_to_expiry': short_exp,
+                        'long_days_to_expiry': long_exp,
+                        'short_expiry': short_option.get('expiry', ''),
+                        'long_expiry': long_option.get('expiry', ''),
+                        'delta': delta,
+                        'theta_advantage': theta_advantage,
+                        'short_to_long_ratio': short_to_long_ratio,
+                        'score': score
+                    }
+                    
+                    suitable_spreads.append(spread)
+        
+        # Sort by score (highest first)
+        suitable_spreads.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Return the highest-scoring spread or None if no suitable spreads
+        return suitable_spreads[0] if suitable_spreads else None
+    
+    def adjust_position(self, position, current_price):
+        """Determine if a position needs adjustment based on price movement"""
+        # Extract relevant position details
+        strategy = position.get('strategy', '')
+        strike = position.get('strike', 0)
+        short_expiry = position.get('short_expiry', '')
+        short_days_remaining = self.calculate_days_to_expiry(short_expiry)
+        net_debit = position.get('net_debit', 0)
+        
+        # If missing essential details, take no action
+        if not strike or not short_expiry:
+            return {
+                'action': 'NO_ACTION',
+                'reason': 'Incomplete position details for calendar spread'
+            }
+        
+        # Estimate current profit/loss (simplified model)
+        # For calendar spreads, max profit typically occurs when price is near strike at short expiration
+        # This is a simplified approximation; actual P/L would depend on option greeks and IV
+        price_to_strike_percent = abs((current_price - strike) / strike) * 100
+        
+        # Three scenarios:
+        # 1. Short-term option expired or very close to expiry
+        if short_days_remaining <= 1:
+            if price_to_strike_percent <= 2:  # Price near strike at short expiration (ideal)
+                return {
+                    'action': 'ROLL_SHORT_OPTION',
+                    'reason': f'Short option expiring with price near strike - roll to collect more premium'
+                }
+            else:  # Price moved away from strike
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Short option expiring with price away from strike - close to limit risk'
+                }
+        
+        # 2. Short-term option close to expiry, but not imminent
+        elif short_days_remaining <= 5:
+            # If price is near strike, profitable situation
+            if price_to_strike_percent <= 3:
+                return {
+                    'action': 'MONITOR',
+                    'reason': f'Short option expiring soon with price near strike - favorable position'
+                }
+            # If price moved far from strike, consider closing
+            elif price_to_strike_percent >= 8:
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Price moved {price_to_strike_percent:.1f}% away from strike with expiry approaching'
+                }
+        
+        # 3. Short-term option still has significant time value
+        else:
+            # If price moved dramatically, consider closing
+            if price_to_strike_percent >= 15:
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Price moved {price_to_strike_percent:.1f}% away from strike - too much directional risk'
+                }
+            # If IV increased dramatically, may be profitable to close early
+            if position.get('iv_change_percent', 0) > 20:
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Implied volatility increased significantly - favorable to close early'
+                }
+        
+        # Default: no adjustment needed
+        return {
+            'action': 'NO_ACTION',
+            'reason': 'Position within parameters'
+        }
+    
+    def generate_order_parameters(self, action, position, available_options=None):
+        """Generate order parameters for trade execution"""
+        symbol = position.get('symbol')
+        quantity = position.get('quantity', 0)
+        strike = position.get('strike', 0)
+        option_type_code = 'C' if self.option_type == 'call' else 'P'  # C for call, P for put
+        short_expiry = position.get('short_expiry', '')
+        long_expiry = position.get('long_expiry', '')
+        
+        if action == 'CLOSE_POSITION':
+            return {
+                'action': 'CLOSE_CALENDAR',
+                'symbol': symbol,
+                'quantity': quantity,
+                'short_option': f"{symbol}_{option_type_code}_{strike}_{short_expiry}",
+                'long_option': f"{symbol}_{option_type_code}_{strike}_{long_expiry}",
+                'order_type': 'MARKET'
+            }
+        
+        elif action == 'ROLL_SHORT_OPTION':
+            if not available_options:
+                return None
+            
+            # Determine which options to use based on the option type
+            option_key = 'calls' if self.option_type == 'call' else 'puts'
+            if option_key not in available_options or not available_options[option_key]:
+                return None
+            
+            options = available_options[option_key]
+            
+            # Find a new short option with the same strike but a later expiry
+            # Target ~30 days out from current date
+            target_days = 30
+            best_option = None
+            best_days_diff = float('inf')
+            
+            for option in options:
+                if option.get('strike') != strike:
+                    continue
+                    
+                days = option.get('days_to_expiry', 0)
+                # Must be more than 14 days out but less than the long option
+                long_days = position.get('long_days_to_expiry', 120)
+                if days < 14 or days >= long_days:
+                    continue
+                    
+                days_diff = abs(days - target_days)
+                if days_diff < best_days_diff:
+                    best_days_diff = days_diff
+                    best_option = option
+            
+            if not best_option:
+                return None
+            
+            # Create order to roll the short option
+            new_expiry = best_option.get('expiry', '')
+            return {
+                'action': 'ROLL_SHORT_OPTION',
+                'symbol': symbol,
+                'quantity': quantity,
+                'old_option': f"{symbol}_{option_type_code}_{strike}_{short_expiry}",
+                'new_option': f"{symbol}_{option_type_code}_{strike}_{new_expiry}",
+                'order_type': 'NET_CREDIT',
+                'min_credit': best_option.get('premium', 0) * 0.8  # Target at least 80% of theoretical premium
+            }
+        
+        return None
+
+class DiagonalSpreadStrategy(OptionsStrategy):
+    """
+    Implements a Diagonal Spread options strategy.
+    This is a combination of a horizontal (calendar) spread and a vertical spread,
+    using different strikes and different expiration dates.
+    It can be used with either calls or puts.
+    """
+    
+    def __init__(self, risk_level='moderate', profit_target_percentage=5.0, 
+                 stop_loss_percentage=3.0, options_expiry_days=30, option_type='call'):
+        """
+        Initialize the diagonal spread strategy.
+        
+        Args:
+            option_type (str): Type of options to use - 'call' or 'put'
+        """
+        super().__init__(risk_level, profit_target_percentage, stop_loss_percentage, options_expiry_days)
+        self.option_type = option_type.lower()
+        if self.option_type not in ['call', 'put']:
+            logger.warning(f"Invalid option type '{option_type}' for diagonal spread. Using 'call'.")
+            self.option_type = 'call'
+            
+        logger.info(f"Initialized {self.option_type} diagonal spread strategy with risk level: {risk_level}")
+    
+    def _configure_risk_parameters(self):
+        """Configure strategy parameters based on the selected risk level"""
+        if self.risk_level == 'conservative':
+            # Conservative: Further OTM diagonal spreads
+            self.short_delta_target = 0.30 if self.option_type == 'call' else -0.30  # Target delta for short option
+            self.long_delta_target = 0.40 if self.option_type == 'call' else -0.40   # Target delta for long option
+            self.delta_tolerance = 0.15  # How close to target delta
+            self.short_term_days = 15   # Target days until expiration for short option
+            self.long_term_days = 45    # Target days until expiration for long option
+            self.days_between_expiries = 30  # Target difference between expiries
+            self.strike_diff_target = 5.0  # Target % difference between strikes
+            self.premium_min_percentage = 15.0  # Short premium should be at least this % of long premium
+        
+        elif self.risk_level == 'aggressive':
+            # Aggressive: More ATM diagonal spreads
+            self.short_delta_target = 0.45 if self.option_type == 'call' else -0.45  # Target delta for short option
+            self.long_delta_target = 0.55 if self.option_type == 'call' else -0.55   # Target delta for long option
+            self.delta_tolerance = 0.20  # How close to target delta
+            self.short_term_days = 7    # Target days until expiration for short option
+            self.long_term_days = 35    # Target days until expiration for long option
+            self.days_between_expiries = 28  # Target difference between expiries
+            self.strike_diff_target = 3.0  # Target % difference between strikes
+            self.premium_min_percentage = 25.0  # Short premium should be at least this % of long premium
+        
+        else:  # moderate (default)
+            # Moderate: Balanced approach
+            self.short_delta_target = 0.35 if self.option_type == 'call' else -0.35  # Target delta for short option
+            self.long_delta_target = 0.45 if self.option_type == 'call' else -0.45   # Target delta for long option
+            self.delta_tolerance = 0.15  # How close to target delta
+            self.short_term_days = 10   # Target days until expiration for short option
+            self.long_term_days = 40    # Target days until expiration for long option
+            self.days_between_expiries = 30  # Target difference between expiries
+            self.strike_diff_target = 4.0  # Target % difference between strikes
+            self.premium_min_percentage = 20.0  # Short premium should be at least this % of long premium
+    
+    def select_options(self, stock_price, options_data):
+        """Select the best options for a diagonal spread"""
+        if not options_data:
+            logger.warning("No options data available for diagonal spread selection")
+            return None
+        
+        # Determine which options to use based on the option type
+        option_key = 'calls' if self.option_type == 'call' else 'puts'
+        if option_key not in options_data or not options_data[option_key]:
+            logger.warning(f"No {self.option_type} options available for diagonal spread selection")
+            return None
+        
+        options = options_data[option_key]
+        
+        # Find all available expiry dates
+        all_expiries = set()
+        for option in options:
+            if 'days_to_expiry' in option:
+                all_expiries.add(option.get('days_to_expiry'))
+        
+        # Sort expiries from nearest to furthest
+        sorted_expiries = sorted(all_expiries)
+        if len(sorted_expiries) < 2:
+            logger.warning("Need at least two different expiry dates for diagonal spread")
+            return None
+        
+        # Find potential short-term and long-term expiries
+        short_expiries = [exp for exp in sorted_expiries if abs(exp - self.short_term_days) <= 7 and exp >= 5]
+        long_expiries = [exp for exp in sorted_expiries if abs(exp - self.long_term_days) <= 15 and exp > 21]
+        
+        if not short_expiries or not long_expiries:
+            logger.warning("No suitable expiry dates for diagonal spread")
+            return None
+        
+        # Group options by expiry
+        options_by_expiry = {}
+        for option in options:
+            expiry = option.get('days_to_expiry')
+            if expiry not in options_by_expiry:
+                options_by_expiry[expiry] = []
+            options_by_expiry[expiry].append(option)
+        
+        suitable_spreads = []
+        
+        # For each potential short and long expiry combination
+        for short_exp in short_expiries:
+            for long_exp in long_expiries:
+                # Skip if they're the same expiry
+                if short_exp >= long_exp:
+                    continue
+                
+                # Check if the time gap between expiries is appropriate
+                gap = long_exp - short_exp
+                if abs(gap - self.days_between_expiries) > 10:  # Allow 10 days deviation
+                    continue
+                
+                short_options = options_by_expiry.get(short_exp, [])
+                long_options = options_by_expiry.get(long_exp, [])
+                
+                # Sort options by strike
+                short_options.sort(key=lambda x: x.get('strike', 0))
+                long_options.sort(key=lambda x: x.get('strike', 0))
+                
+                # For each potential short option
+                for short_option in short_options:
+                    short_strike = short_option.get('strike', 0)
+                    short_delta = short_option.get('delta', 0)
+                    
+                    # Skip if the delta is too far from our target
+                    if abs(short_delta - self.short_delta_target) > self.delta_tolerance:
+                        continue
+                    
+                    # For call diagonals, we want a higher strike for the short option
+                    # For put diagonals, we want a lower strike for the short option
+                    target_strike_diff = stock_price * (self.strike_diff_target / 100)
+                    
+                    if self.option_type == 'call':
+                        target_long_strike = short_strike - target_strike_diff
+                    else:  # put
+                        target_long_strike = short_strike + target_strike_diff
+                    
+                    # Find the closest long option strike
+                    best_long_option = None
+                    best_strike_diff = float('inf')
+                    
+                    for long_option in long_options:
+                        long_strike = long_option.get('strike', 0)
+                        long_delta = long_option.get('delta', 0)
+                        
+                        # Skip if long delta is too far from target
+                        if abs(long_delta - self.long_delta_target) > self.delta_tolerance:
+                            continue
+                            
+                        # For call, ensure long strike is lower than short strike
+                        # For put, ensure long strike is higher than short strike
+                        if (self.option_type == 'call' and long_strike >= short_strike) or \
+                           (self.option_type == 'put' and long_strike <= short_strike):
+                            continue
+                        
+                        strike_diff = abs(long_strike - target_long_strike)
+                        if strike_diff < best_strike_diff:
+                            best_strike_diff = strike_diff
+                            best_long_option = long_option
+                    
+                    if not best_long_option:
+                        continue  # No suitable long option found
+                    
+                    # Calculate key metrics
+                    short_premium = short_option.get('premium', 0)
+                    long_premium = best_long_option.get('premium', 0)
+                    long_strike = best_long_option.get('strike', 0)
+                    net_debit = long_premium - short_premium
+                    
+                    # Skip if short premium is too small relative to long premium
+                    short_to_long_ratio = (short_premium / long_premium) * 100 if long_premium > 0 else 0
+                    if short_to_long_ratio < self.premium_min_percentage:
+                        continue
+                    
+                    # Calculate strike difference percentage
+                    strike_diff_pct = abs((short_strike - long_strike) / stock_price) * 100
+                    
+                    # Calculate theta (time decay) advantage
+                    short_theta = abs(short_option.get('theta', 0.01))
+                    long_theta = abs(best_long_option.get('theta', 0.005))
+                    theta_advantage = short_theta - long_theta
+                    
+                    # Calculate score for this spread
+                    short_delta_score = 1 - abs(short_delta - self.short_delta_target) / self.delta_tolerance
+                    long_delta_score = 1 - abs(long_delta - self.long_delta_target) / self.delta_tolerance
+                    theta_score = theta_advantage * 100  # Scale up the theta value
+                    expiry_gap_score = 1 - abs(gap - self.days_between_expiries) / 10
+                    strike_diff_score = 1 - abs(strike_diff_pct - self.strike_diff_target) / 3
+                    premium_ratio_score = short_to_long_ratio / self.premium_min_percentage
+                    
+                    # Different weighting based on risk level
+                    if self.risk_level == 'conservative':
+                        score = (short_delta_score * 0.2 + long_delta_score * 0.2 + 
+                                theta_score * 0.2 + expiry_gap_score * 0.1 + 
+                                strike_diff_score * 0.2 + premium_ratio_score * 0.1)
+                    elif self.risk_level == 'aggressive':
+                        score = (short_delta_score * 0.15 + long_delta_score * 0.15 + 
+                                theta_score * 0.3 + expiry_gap_score * 0.1 + 
+                                strike_diff_score * 0.15 + premium_ratio_score * 0.15)
+                    else:  # moderate
+                        score = (short_delta_score * 0.2 + long_delta_score * 0.15 + 
+                                theta_score * 0.25 + expiry_gap_score * 0.1 + 
+                                strike_diff_score * 0.15 + premium_ratio_score * 0.15)
+                    
+                    # Create spread object
+                    spread = {
+                        'strategy': f"{self.option_type.upper()}_DIAGONAL_SPREAD",
+                        'short_option': short_option,
+                        'long_option': best_long_option,
+                        'short_strike': short_strike,
+                        'long_strike': long_strike,
+                        'short_premium': short_premium,
+                        'long_premium': long_premium,
+                        'net_debit': net_debit,
+                        'short_days_to_expiry': short_exp,
+                        'long_days_to_expiry': long_exp,
+                        'short_expiry': short_option.get('expiry', ''),
+                        'long_expiry': best_long_option.get('expiry', ''),
+                        'short_delta': short_delta,
+                        'long_delta': best_long_option.get('delta', 0),
+                        'theta_advantage': theta_advantage,
+                        'strike_diff_pct': strike_diff_pct,
+                        'short_to_long_ratio': short_to_long_ratio,
+                        'score': score
+                    }
+                    
+                    suitable_spreads.append(spread)
+        
+        # Sort by score (highest first)
+        suitable_spreads.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Return the highest-scoring spread or None if no suitable spreads
+        return suitable_spreads[0] if suitable_spreads else None
+    
+    def adjust_position(self, position, current_price):
+        """Determine if a position needs adjustment based on price movement"""
+        # Extract relevant position details
+        short_strike = position.get('short_strike', 0)
+        long_strike = position.get('long_strike', 0)
+        short_expiry = position.get('short_expiry', '')
+        short_days_remaining = self.calculate_days_to_expiry(short_expiry)
+        strike_diff = abs(short_strike - long_strike)
+        net_debit = position.get('net_debit', 0)
+        
+        # If missing essential details, take no action
+        if not short_strike or not long_strike or not short_expiry:
+            return {
+                'action': 'NO_ACTION',
+                'reason': 'Incomplete position details for diagonal spread'
+            }
+        
+        # Calculate current position in relation to strikes
+        # For calls, we want current price between the strikes, closer to long strike
+        # For puts, we also want current price between strikes, closer to long strike
+        is_call = self.option_type == 'call'
+        if is_call:
+            is_between_strikes = long_strike <= current_price <= short_strike
+            price_to_short_percent = abs((current_price - short_strike) / short_strike) * 100
+            price_to_long_percent = abs((current_price - long_strike) / long_strike) * 100
+        else:  # put
+            is_between_strikes = short_strike <= current_price <= long_strike
+            price_to_short_percent = abs((current_price - short_strike) / short_strike) * 100
+            price_to_long_percent = abs((current_price - long_strike) / long_strike) * 100
+        
+        # Three scenarios based on short option expiry
+        # 1. Short-term option expired or very close to expiry
+        if short_days_remaining <= 1:
+            if is_between_strikes:  # Ideal scenario
+                return {
+                    'action': 'ROLL_SHORT_OPTION',
+                    'reason': f'Short option expiring with price between strikes - roll to collect more premium'
+                }
+            else:  # Price moved beyond one of the strikes
+                # For calls: danger if price > short strike
+                # For puts: danger if price < short strike
+                if (is_call and current_price > short_strike) or (not is_call and current_price < short_strike):
+                    return {
+                        'action': 'CLOSE_POSITION',
+                        'reason': f'Short option expiring with price beyond short strike - risk of assignment'
+                    }
+                else:  # Less profitable but not dangerous
+                    return {
+                        'action': 'ROLL_SHORT_OPTION',
+                        'reason': f'Short option expiring with suboptimal price - roll to reset position'
+                    }
+        
+        # 2. Short-term option close to expiry, but not imminent
+        elif short_days_remaining <= 5:
+            if is_between_strikes:  # Favorable scenario
+                return {
+                    'action': 'MONITOR',
+                    'reason': f'Short option expiring soon with price between strikes - favorable position'
+                }
+            # If price moved far beyond short strike, increasing risk
+            elif ((is_call and current_price > short_strike * 1.03) or 
+                  (not is_call and current_price < short_strike * 0.97)):
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Price moved significantly beyond short strike with expiry approaching'
+                }
+            # If price moved away from the profitable zone but not dangerously so
+            else:
+                return {
+                    'action': 'MONITOR',
+                    'reason': f'Position not optimal but manageable - continue monitoring'
+                }
+        
+        # 3. Short-term option still has significant time value
+        else:
+            # If price moved dramatically beyond short strike, increasing risk
+            if ((is_call and current_price > short_strike * 1.05) or 
+                (not is_call and current_price < short_strike * 0.95)):
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Price moved significantly beyond short strike - increasing risk'
+                }
+            # If IV increased dramatically, may be profitable to close early
+            if position.get('iv_change_percent', 0) > 20:
+                return {
+                    'action': 'CLOSE_POSITION',
+                    'reason': f'Implied volatility increased significantly - favorable to close early'
+                }
+        
+        # Default: no adjustment needed
+        return {
+            'action': 'NO_ACTION',
+            'reason': 'Position within parameters'
+        }
+    
+    def generate_order_parameters(self, action, position, available_options=None):
+        """Generate order parameters for trade execution"""
+        symbol = position.get('symbol')
+        quantity = position.get('quantity', 0)
+        short_strike = position.get('short_strike', 0)
+        long_strike = position.get('long_strike', 0)
+        option_type_code = 'C' if self.option_type == 'call' else 'P'  # C for call, P for put
+        short_expiry = position.get('short_expiry', '')
+        long_expiry = position.get('long_expiry', '')
+        
+        if action == 'CLOSE_POSITION':
+            return {
+                'action': 'CLOSE_DIAGONAL',
+                'symbol': symbol,
+                'quantity': quantity,
+                'short_option': f"{symbol}_{option_type_code}_{short_strike}_{short_expiry}",
+                'long_option': f"{symbol}_{option_type_code}_{long_strike}_{long_expiry}",
+                'order_type': 'MARKET'
+            }
+        
+        elif action == 'ROLL_SHORT_OPTION':
+            if not available_options:
+                return None
+            
+            # Determine which options to use based on the option type
+            option_key = 'calls' if self.option_type == 'call' else 'puts'
+            if option_key not in available_options or not available_options[option_key]:
+                return None
+            
+            options = available_options[option_key]
+            
+            # Find a new short option with similar strike but later expiry
+            target_days = 30
+            best_option = None
+            best_days_diff = float('inf')
+            
+            for option in options:
+                # Check if strike is close enough to original short strike
+                if abs(option.get('strike', 0) - short_strike) / short_strike > 0.02:  # Allow 2% difference
+                    continue
+                    
+                days = option.get('days_to_expiry', 0)
+                # Must be more than 14 days out but less than the long option
+                long_days = position.get('long_days_to_expiry', 120)
+                if days < 14 or days >= long_days:
+                    continue
+                    
+                days_diff = abs(days - target_days)
+                if days_diff < best_days_diff:
+                    best_days_diff = days_diff
+                    best_option = option
+            
+            if not best_option:
+                return None
+            
+            # Create order to roll the short option
+            new_strike = best_option.get('strike', 0)
+            new_expiry = best_option.get('expiry', '')
+            return {
+                'action': 'ROLL_SHORT_OPTION',
+                'symbol': symbol,
+                'quantity': quantity,
+                'old_option': f"{symbol}_{option_type_code}_{short_strike}_{short_expiry}",
+                'new_option': f"{symbol}_{option_type_code}_{new_strike}_{new_expiry}",
+                'order_type': 'NET_CREDIT',
+                'min_credit': best_option.get('premium', 0) * 0.7  # Target at least 70% of theoretical premium
+            }
+        
+        return None
+
 class IronCondorStrategy(OptionsStrategy):
     """
     Implements an Iron Condor options strategy.

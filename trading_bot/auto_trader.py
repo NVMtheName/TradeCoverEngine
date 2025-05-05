@@ -6,6 +6,14 @@ import threading
 import queue
 import random
 import os
+from trading_bot.strategies import (
+    CoveredCallStrategy,
+    PutCreditSpreadStrategy,
+    IronCondorStrategy,
+    IronButterflyStrategy,
+    CalendarSpreadStrategy,
+    DiagonalSpreadStrategy
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -202,6 +202,42 @@
                                         </label>
                                     </div>
                                     
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_iron_butterfly" name="enabled_strategies" value="iron_butterfly" 
+                                               {% if 'iron_butterfly' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_iron_butterfly">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-warning me-2">Advanced</span>
+                                                Iron Butterfly
+                                            </div>
+                                            <small class="d-block text-muted">Market-neutral with narrower profit zone</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_calendar_spread" name="enabled_strategies" value="calendar_spread" 
+                                               {% if 'calendar_spread' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_calendar_spread">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-warning me-2">Advanced</span>
+                                                Calendar Spread
+                                            </div>
+                                            <small class="d-block text-muted">Profit from time decay while remaining directionally neutral</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_diagonal_spread" name="enabled_strategies" value="diagonal_spread" 
+                                               {% if 'diagonal_spread' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_diagonal_spread">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-danger me-2">Complex</span>
+                                                Diagonal Spread
+                                            </div>
+                                            <small class="d-block text-muted">Advanced strategy with different strikes and expirations</small>
+                                        </label>
+                                    </div>
+                                    
                                     <h6 class="w-100 mb-2 mt-3">Forex Strategies</h6>
                                     <div class="form-check form-check-inline me-4 mb-3">
                                         <input class="form-check-input" type="checkbox" id="strategy_forex_trend" name="enabled_strategies" value="forex_trend" 
