@@ -781,14 +781,18 @@ def oauth_initiate():
             # Use the exact redirect URI provided
             exact_redirect_uri = "https://7352034c-d741-4cbf-9bc5-d05d9b93e49d-00-z4porq8bem36.picard.replit.dev/oauth/callback"
             
-            # Define authorization parameters with exact values
+            # Define authorization parameters with exact values according to Schwab documentation
+            # https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements
+            # The authorize request must include client_id, redirect_uri, response_type, and scope
             auth_params = {
                 'client_id': client_id,
-                'redirect_uri': exact_redirect_uri
+                'redirect_uri': exact_redirect_uri,
+                'response_type': 'code',  # Required for authorization code flow
+                'scope': 'openid profile'  # Required scopes for Schwab API
             }
             
             # For debugging
-            logger.info(f"Using simplified Schwab OAuth authorization URL format as specified in API docs")
+            logger.info(f"Using complete Schwab OAuth authorization URL format as specified in API docs")
             
             # Build the authorization URL with proper URL encoding
             from urllib.parse import urlencode
@@ -958,13 +962,15 @@ def oauth_callback():
                 # For testing purposes, we'll use a placeholder value
                 client_secret = settings.api_secret or "YOUR_API_SECRET"
                 
-                # Prepare token payload using the exact same credentials as the authorization request
+                # Prepare token payload according to Schwab's documentation
+                # https://developer.schwab.com/user-guides/apis-and-apps/oauth-restart-vs-refresh-token
                 token_payload = {
                     'grant_type': 'authorization_code',
                     'code': code,
-                    'redirect_uri': redirect_uri,
+                    'redirect_uri': redirect_uri,  # Must match the original redirect exactly
                     'client_id': client_id,
-                    'client_secret': client_secret
+                    'client_secret': client_secret,
+                    'scope': 'openid profile'  # Match scopes from authorization request
                 }
                 
                 # Log the token exchange request (excluding sensitive data)
