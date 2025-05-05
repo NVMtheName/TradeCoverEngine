@@ -3,40 +3,69 @@
 {% block title %}Login - Trading Bot{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container py-5">
     <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Login</h4>
+        <div class="col-md-8 col-lg-6">
+            <!-- Login Status Banner -->
+            <div class="alert alert-warning mb-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-user-lock fa-2x me-3"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h5 class="alert-heading mb-1">Authentication Required</h5>
+                        <p class="mb-0">You need to login to access the trading features. Please enter your credentials below.</p>
+                    </div>
                 </div>
-                <div class="card-body">
+            </div>
+            
+            <!-- Login Card -->
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h4 class="mb-0"><i class="fas fa-sign-in-alt me-2"></i>Login to Trading Bot</h4>
+                </div>
+                <div class="card-body p-4">
                     <form method="post" action="{{ url_for('login') }}">
                         {{ form.hidden_tag() }}
                         
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label for="username" class="form-label">Username</label>
-                            <input type="text" class="form-control" id="username" name="username" required>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username" required>
+                            </div>
                         </div>
                         
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label for="password" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required>
+                            </div>
                         </div>
                         
-                        <div class="mb-3 form-check">
+                        <div class="mb-4 form-check">
                             <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                            <label class="form-check-label" for="remember">Remember me</label>
+                            <label class="form-check-label" for="remember">Remember me for 30 days</label>
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">Login</button>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </button>
                         </div>
                     </form>
                 </div>
-                <div class="card-footer text-center">
-                    <p class="mb-0">Don't have an account? <a href="{{ url_for('register') }}" class="text-decoration-none">Register here</a></p>
+                <div class="card-footer bg-light p-3 text-center">
+                    <p class="mb-0">Don't have an account? <a href="{{ url_for('register') }}" class="text-decoration-none fw-bold">Register here</a></p>
                 </div>
+            </div>
+            
+            <!-- Additional Info -->
+            <div class="mt-4 text-center">
+                <p class="text-muted">
+                    <i class="fas fa-shield-alt me-1"></i> Secure login with industry-standard encryption
+                </p>
             </div>
         </div>
     </div>
