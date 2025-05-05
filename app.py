@@ -40,9 +40,6 @@ db.init_app(app)
 # Import models after initializing db
 from models import User, Settings, Trade, WatchlistItem
 
-# Import forms
-from forms import LoginForm, RegistrationForm
-
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -188,97 +185,11 @@ def before_request():
         initialize_app()
 
 # Routes
-
-# Authentication routes
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    # If user is already authenticated, redirect to dashboard
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        # Attempt to find the user
-        user = User.query.filter_by(username=form.username.data).first()
-        
-        # Check if user exists and password is correct
-        if user and user.check_password(form.password.data):
-            # Login the user
-            login_user(user, remember=form.remember.data)
-            
-            # Update last login time
-            user.last_login = datetime.now()
-            db.session.commit()
-            
-            # Redirect to the requested page or dashboard
-            next_page = request.args.get('next')
-            return redirect(next_page if next_page else url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'danger')
-    
-    return render_template('login.html', form=form)
-
-@app.route('/logout')
-def logout():
-    logout_user()
-    flash('You have been logged out', 'info')
-    return redirect(url_for('login'))
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    # If user is already authenticated, redirect to dashboard
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        try:
-            # Create a new user
-            user = User(username=form.username.data, email=form.email.data)
-            user.set_password(form.password.data)
-            
-            # Add the user to the database
-            db.session.add(user)
-            db.session.commit()
-            
-            # Create default settings for the user
-            user_settings = Settings(
-                user_id=user.id,
-                api_provider='schwab',
-                is_paper_trading=True,
-                force_simulation_mode=True,
-                risk_level='moderate',
-                max_position_size=5000.0,
-                profit_target_percentage=5.0,
-                stop_loss_percentage=3.0,
-                options_expiry_days=30,
-                enabled_strategies='covered_call',
-                forex_leverage=10.0,
-                forex_lot_size=0.1,
-                forex_pairs_watchlist='EUR/USD,GBP/USD,USD/JPY'
-            )
-            db.session.add(user_settings)
-            db.session.commit()
-            
-            flash('Account created successfully! You can now log in.', 'success')
-            return redirect(url_for('login'))
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error creating user: {str(e)}")
-            flash(f"Error creating account: {str(e)}", 'danger')
-    
-    return render_template('register.html', form=form)
-
-# Main routes
 @app.route('/')
 def index():
-    # If user is already authenticated, redirect to dashboard
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
     return render_template('index.html')
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
     # Get account info and recent trades
     account_info = {}
@@ -321,7 +232,6 @@ def dashboard():
     )
 
 @app.route('/settings', methods=['GET', 'POST'])
-@login_required
 def settings():
     settings = Settings.query.first()
     
@@ -364,13 +274,11 @@ def settings():
     return render_template('settings.html', settings=settings)
 
 @app.route('/trades')
-@login_required
 def trades():
     all_trades = Trade.query.order_by(Trade.timestamp.desc()).all()
     return render_template('trades.html', trades=all_trades)
 
 @app.route('/analysis')
-@login_required
 def analysis():
     # Get stock symbols for analysis
     watchlist = []
@@ -391,7 +299,6 @@ def analysis():
     return render_template('analysis.html', watchlist=watchlist, opportunities=opportunities)
 
 @app.route('/watchlist/add', methods=['POST'])
-@login_required
 def add_to_watchlist():
     symbol = request.form.get('symbol', '').strip().upper()
     
@@ -418,7 +325,6 @@ def add_to_watchlist():
     return redirect(url_for('analysis'))
 
 @app.route('/watchlist/remove/<symbol>', methods=['POST'])
-@login_required
 def remove_from_watchlist(symbol):
     try:
         watchlist_item = WatchlistItem.query.filter_by(symbol=symbol).first()
@@ -433,7 +339,6 @@ def remove_from_watchlist(symbol):
     return redirect(url_for('analysis'))
 
 @app.route('/execute/covered-call', methods=['POST'])
-@login_required
 def execute_covered_call():
     symbol = request.form.get('symbol')
     expiry_date = request.form.get('expiry_date')
@@ -640,7 +545,6 @@ def oauth_callback():
 # Error handling
 # Auto trading routes
 @app.route('/auto-trading')
-@login_required
 def auto_trading():
     """Display auto trading status and controls"""
     status = {}
@@ -685,7 +589,6 @@ def auto_trading():
     )
 
 @app.route('/auto-trading/start', methods=['POST'])
-@login_required
 def start_auto_trading():
     """Start the auto trader"""
     try:
@@ -705,7 +608,6 @@ def start_auto_trading():
     return redirect(url_for('auto_trading'))
 
 @app.route('/auto-trading/stop', methods=['POST'])
-@login_required
 def stop_auto_trading():
     """Stop the auto trader"""
     try:
@@ -725,7 +627,6 @@ def stop_auto_trading():
     return redirect(url_for('auto_trading'))
 
 @app.route('/auto-trading/scan', methods=['POST'])
-@login_required
 def scan_for_opportunities():
     """Manually trigger a scan for trading opportunities"""
     opportunities = []
@@ -750,7 +651,6 @@ def scan_for_opportunities():
     return redirect(url_for('auto_trading'))
 
 @app.route('/auto-trading/settings', methods=['POST'])
-@login_required
 def update_auto_trading_settings():
     """Update auto trading settings"""
     try:
@@ -779,7 +679,6 @@ def update_auto_trading_settings():
     return redirect(url_for('auto_trading'))
 
 @app.route('/api/ai-analysis/<symbol>')
-@login_required
 def ai_analysis(symbol):
     """Get AI analysis for a symbol"""
     try:
