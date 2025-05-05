@@ -823,7 +823,9 @@ def oauth_initiate():
             
             # Build the authorization URL with proper URL encoding
             from urllib.parse import urlencode
-            auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
+            
+            # We no longer need to determine auth_base_url since we're using our proxy
+            # This prevents the 'auth_base_url is unbound' error
             
             logger.info(f"Using Schwab API key: {client_id[:4]}...{client_id[-4:]} for OAuth flow")
             logger.info(f"Redirect URI: {exact_redirect_uri}")
@@ -1036,64 +1038,35 @@ def oauth_callback():
                     'User-Agent': 'Trading Bot OAuth2 Flow'
                 }
                 
-                # Try each token URL pattern until one works
+                # Use our proxy for token exchange to avoid CORS issues
                 token_response = None
-                successful_url = None
                 
-                for url_index, current_token_url in enumerate(token_urls):
-                    try:
-                        # Log the token exchange request (excluding sensitive data)
-                        logger.info(f"Attempting token exchange with URL {url_index+1}/{len(token_urls)}: {current_token_url}")
-                        logger.info(f"Using redirect_uri: {redirect_uri}")
-                        
-                        # Make the token exchange request
-                        response = requests.post(
-                            current_token_url,
-                            data=token_payload,
-                            headers=token_headers,
-                            timeout=15  # Longer timeout for token exchange
-                        )
-                        
-                        logger.info(f"Response status: {response.status_code}")
-                        
-                        # If successful, use this response and URL
-                        if response.status_code == 200:
-                            token_response = response
-                            successful_url = current_token_url
-                            logger.info(f"Found working token endpoint: {successful_url}")
-                            break
-                        
-                        # Save the first response for error reporting if no endpoints work
-                        if not token_response:
-                            token_response = response
-                        
-                        # If we get a 400 Bad Request, this could be the right endpoint but with invalid parameters
-                        # This is more likely the correct endpoint than a 404 Not Found response
-                        if response.status_code == 400:
-                            logger.warning(f"Got 400 Bad Request from {current_token_url}, this might be the correct endpoint with invalid parameters")
-                            token_response = response
-                            successful_url = current_token_url
-                            # Continue trying other URLs in case we find a working one
-                        
-                        # If we get a 404, this endpoint doesn't exist
-                        if response.status_code == 404:
-                            logger.warning(f"Endpoint not found (404): {current_token_url}")
-                            # Continue to next URL
-                            
-                    except Exception as e:
-                        logger.warning(f"Error with token endpoint {current_token_url}: {str(e)}")
-                        # Continue to next URL
-                        continue
+                # Build proxy token URL
+                proxy_token_url = url_for('schwab_proxy.proxy_oauth_token', _external=True)
+                logger.info(f"Using proxy for token exchange: {proxy_token_url}")
+                logger.info(f"Using redirect_uri: {redirect_uri}")
                 
-                # Update token_url to the one that worked (or the last one tried)
-                if successful_url:
-                    token_url = successful_url
-                    logger.info(f"Using working token URL: {token_url}")
-                else:
-                    logger.warning("No token endpoints returned a 200 status code, using the last response")
+                try:
+                    # Make the token exchange request through our proxy
+                    response = requests.post(
+                        proxy_token_url,
+                        data=token_payload,
+                        headers=token_headers,
+                        timeout=15  # Longer timeout for token exchange
+                    )
+                    
+                    # Log the response status
+                    logger.info(f"Token exchange response status: {response.status_code}")
+                    
+                    # Store the response for processing
+                    token_response = response
+                    
+                except Exception as e:
+                    logger.error(f"Error during token exchange: {str(e)}")
+                    flash(f"Authentication error: {str(e)}", 'danger')
+                    return redirect(url_for('settings'))
                 
-                if not token_response:
-                    raise Exception("All token endpoints failed")
+                # No need to try multiple URLs since we're using our proxy
                     
                 logger.info(f"Final token exchange response status: {token_response.status_code}")
                 
