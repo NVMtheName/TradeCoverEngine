@@ -1110,7 +1110,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_historical_data(symbol, timeframe, limit)  # Try again with new token
                     return self._get_simulated_historical_data(symbol, timeframe, limit)
                     
@@ -1348,7 +1350,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_options_chain(symbol)  # Try again with new token
                     return self._get_simulated_options_chain(symbol)
                     
@@ -1606,7 +1610,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.place_order(order_details, account_id)  # Try again with new token
                     return {
                         'success': False,
@@ -1803,7 +1809,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_market_hours()  # Try again with new token
                     return self._get_simulated_market_hours()
                     
