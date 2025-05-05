@@ -93,14 +93,17 @@ class APIConnector:
         # Set base URLs exactly as specified in the Schwab Trader API documentation
         # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
         if self.paper_trading:
-            # Sandbox environment
+            # Sandbox environment - using explicit endpoints from documentation
             self.base_url = "https://api-sandbox.schwabapi.com/broker/rest/v1"
-            self.auth_url = "https://api-sandbox.schwabapi.com"
+            self.oauth_auth_url = "https://api-sandbox.schwabapi.com/oauth2/authorize"
+            self.oauth_token_url = "https://api-sandbox.schwabapi.com/oauth2/token"
             logger.info("Using Schwab sandbox API endpoints (v1)")
         else:
-            # Production environment
+            # Production environment - using explicit endpoints from documentation
+            # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
             self.base_url = "https://api.schwabapi.com/broker/rest/v1"
-            self.auth_url = "https://api.schwabapi.com"
+            self.oauth_auth_url = "https://api.schwabapi.com/oauth2/authorize"
+            self.oauth_token_url = "https://api.schwabapi.com/oauth2/token"
             logger.info("Using Schwab production API endpoints (v1)")
             
         # Set API headers (no authorization yet - will be added after OAuth flow)
@@ -156,8 +159,8 @@ class APIConnector:
             from datetime import datetime, timedelta
             
             # Get the token endpoint URL based on environment
-            # For Schwab API, the token URL is /oauth/token
-            token_url = f"{self.auth_url}/oauth/token"
+            # For Schwab API, the token URL is /oauth2/token
+            token_url = self.oauth_token_url  # Use the proper OAuth2 token URL
                 
             # Prepare token refresh request based on Schwab API docs
             token_payload = {
@@ -165,7 +168,7 @@ class APIConnector:
                 'refresh_token': self.refresh_token,
                 'client_id': self.client_id,
                 'client_secret': self.client_secret,
-                'scope': 'readonly'  # Same scope as original request per Schwab documentation
+                'scope': 'trading'  # Using trading scope for full API access per Schwab documentation
             }
             
             # Execute the token refresh request

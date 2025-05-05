@@ -742,16 +742,14 @@ def oauth_initiate():
             session['oauth_initiation_time'] = datetime.now().timestamp()
             
             # Get the base URL based on paper trading setting (use the correct format per Schwab API docs)
-            # The correct URL for Trader API authorization
-            # https://api.schwabapi.com/v1/oauth/authorize (based on connection tests)
-            # Use exact URLs from the Schwab Trader API documentation
-            # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
+            # Use exact URLs from the Schwab Trader API production specification
+            # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
             if settings.is_paper_trading:
-                auth_base_url = "https://api-sandbox.schwabapi.com/oauth/authorize"
-                logger.info("Using Schwab sandbox OAuth authorization endpoint (OAuth path)")
+                auth_base_url = "https://api-sandbox.schwabapi.com/oauth2/authorize"
+                logger.info("Using Schwab sandbox OAuth2 authorization endpoint")
             else:
-                auth_base_url = "https://api.schwabapi.com/oauth/authorize"
-                logger.info("Using Schwab production OAuth authorization endpoint (OAuth path)")
+                auth_base_url = "https://api.schwabapi.com/oauth2/authorize"
+                logger.info("Using Schwab production OAuth2 authorization endpoint")
                 
             # Note: Based on our connection tests, the API may respond with a 500 status code during testing
             # This is expected and documented in the Schwab API documentation
@@ -814,7 +812,7 @@ def oauth_initiate():
                 'client_id': client_id,
                 'redirect_uri': exact_redirect_uri,
                 'response_type': 'code',  # Required for authorization code flow
-                'scope': 'readonly'  # Required scope for Schwab API per their documentation
+                'scope': 'trading'  # Required scope for Schwab API per their documentation
             }
             
             # For debugging
@@ -979,14 +977,14 @@ def oauth_callback():
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
-                # Use the exact token URL from the Schwab Trader API documentation
-                # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
+                # Use the exact token URL from the Schwab Trader API production specification
+                # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
                 if settings.is_paper_trading:
-                    token_url = "https://api-sandbox.schwabapi.com/oauth/token"
-                    logger.info("Using Schwab sandbox OAuth token endpoint")
+                    token_url = "https://api-sandbox.schwabapi.com/oauth2/token"
+                    logger.info("Using Schwab sandbox OAuth2 token endpoint")
                 else:
-                    token_url = "https://api.schwabapi.com/oauth/token"
-                    logger.info("Using Schwab production OAuth token endpoint")
+                    token_url = "https://api.schwabapi.com/oauth2/token"
+                    logger.info("Using Schwab production OAuth2 token endpoint")
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
@@ -1034,7 +1032,7 @@ def oauth_callback():
                     'redirect_uri': redirect_uri,  # Must match the original redirect exactly
                     'client_id': client_id,
                     'client_secret': client_secret,
-                    'scope': 'readonly'  # Match scope from authorization request per Schwab docs
+                    'scope': 'trading'  # Match scope from authorization request per Schwab docs
                 }
                 
                 # Log the token exchange request (excluding sensitive data)
