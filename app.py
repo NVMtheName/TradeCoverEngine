@@ -440,7 +440,12 @@ def dashboard():
             else:
                 # Set API status to Error for the alert to display
                 account_info = api_connector.get_account_info()
-                account_info['api_status'] = 'Error'
+                # Check if account_info is a dictionary before trying to set a new key
+                if isinstance(account_info, dict):
+                    account_info['api_status'] = 'Error'
+                else:
+                    # Handle case where account_info might be None or some other format
+                    account_info = {'api_status': 'Error'}
                 logger.warning("API is not connected. Using fallback data.")
     except Exception as e:
         logger.error(f"Error retrieving dashboard data: {str(e)}")
