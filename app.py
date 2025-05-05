@@ -780,9 +780,80 @@ def oauth_initiate():
             # Show the callback URL for configuration purposes
             flash(f"The callback URL to register in your Schwab Developer account is: {redirect_uri}", 'info')
             
-            # Now directly redirect to Schwab's authorization page
-            logger.info(f"Redirecting user to Schwab OAuth authorization page")
-            return redirect(auth_url)
+            # Test the authorization URL before redirecting
+            try:
+                import requests
+                from urllib.parse import urlparse, parse_qs
+                
+                # Test connectivity to Schwab's auth endpoint with a HEAD request
+                # This won't initiate the actual OAuth flow but will check if the endpoint is accessible
+                logger.info(f"Testing connection to Schwab's OAuth authorization endpoint")
+                parsed_url = urlparse(auth_url)
+                base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                
+                # Make a test request to check connectivity
+                test_response = requests.head(
+                    base_auth_url,
+                    headers={"User-Agent": "Trading Bot OAuth Test"},
+                    timeout=10
+                )
+                
+                logger.info(f"Schwab authorization endpoint test status: {test_response.status_code}")
+                
+                if test_response.status_code >= 400:
+                    # There's an issue with the connection to Schwab's API
+                    error_message = f"Error connecting to Schwab's authorization endpoint. Status code: {test_response.status_code}."
+                    logger.error(error_message)
+                    
+                    # Check if this is a production endpoint and we're getting access denied
+                    # If so, try the sandbox environment as a fallback
+                    if not settings.is_paper_trading and test_response.status_code == 403:
+                        logger.info("Access denied to production API - trying sandbox environment instead")
+                        flash("Production API access denied - switching to sandbox environment for testing", 'warning')
+                        
+                        # Switch to sandbox environment
+                        settings.is_paper_trading = True
+                        db.session.commit()
+                        
+                        # Reinitialize flow with sandbox environment
+                        return redirect(url_for('oauth_initiate', provider='schwab'))
+                    
+                    # Provide comprehensive troubleshooting information
+                    flash_message = f"""
+                    <strong>Connection to Schwab API failed</strong><br>
+                    Status code: {test_response.status_code}<br>
+                    Possible causes:
+                    <ul>
+                        <li>Your API key may not be fully activated</li>
+                        <li>Replit's IP address may need to be whitelisted in your Schwab developer account</li>
+                        <li>Your application may require review by Schwab before accessing the API</li>
+                        <li>You may be using a production key with sandbox URL or vice versa</li>
+                    </ul>
+                    <p>Contact Schwab Developer Support with this information for assistance.</p>
+                    """
+                    
+                    flash(flash_message, 'danger')
+                    
+                    # Add diagnostic info to the session for display on the settings page
+                    session['oauth_diagnostics'] = {
+                        'status_code': test_response.status_code,
+                        'target_url': base_auth_url,
+                        'headers': dict(test_response.headers),
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'api_provider': 'schwab',
+                        'environment': 'sandbox' if settings.is_paper_trading else 'production'
+                    }
+                    
+                    return redirect(url_for('settings'))
+                
+                # Connection test successful, proceed with the redirect
+                logger.info(f"Redirecting user to Schwab OAuth authorization page: {auth_url}")
+                return redirect(auth_url)
+                
+            except Exception as e:
+                logger.error(f"Error testing connection to Schwab authorization endpoint: {str(e)}")
+                flash(f"Error connecting to Schwab API: {str(e)}. If this persists, contact Schwab Developer Support.", 'danger')
+                return redirect(url_for('settings'))
         else:
             flash(f"OAuth flow not implemented for provider: {provider}", 'warning')
             return redirect(url_for('settings'))

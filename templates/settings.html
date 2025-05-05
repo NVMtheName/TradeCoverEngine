@@ -126,6 +126,26 @@
                                                     <p class="small"><a href="https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements" target="_blank">
                                                         <i class="fas fa-external-link-alt me-1"></i> Schwab Developer Documentation
                                                     </a></p>
+                                                    
+                                                    {% if session.get('oauth_diagnostics') %}
+                                                    <div class="mt-3 pt-3 border-top">
+                                                        <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i> Connection Diagnostics</h6>
+                                                        <p class="small mb-2">The following information may help troubleshoot connection issues:</p>
+                                                        <div class="bg-dark text-light p-2 small" style="border-radius: 4px;">
+                                                            <div><strong>Status:</strong> {{ session.oauth_diagnostics.status_code }}</div>
+                                                            <div><strong>Target URL:</strong> {{ session.oauth_diagnostics.target_url }}</div>
+                                                            <div><strong>Environment:</strong> {{ session.oauth_diagnostics.environment }}</div>
+                                                            <div><strong>Timestamp:</strong> {{ session.oauth_diagnostics.timestamp }}</div>
+                                                            <div class="mt-2"><strong>Next steps:</strong></div>
+                                                            <ol class="mt-1 mb-0">
+                                                                <li>Verify your API key is active in Schwab Developer Portal</li>
+                                                                <li>Contact Schwab API support and provide this information</li>
+                                                                <li>Request Replit IP address whitelisting if needed</li>
+                                                                <li>Confirm you're using the correct environment (sandbox vs production)</li>
+                                                            </ol>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
                                                 </div>
                                             </div>
                                             
