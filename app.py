@@ -26,6 +26,19 @@ app.secret_key = os.environ.get("SESSION_SECRET", os.environ.get("FLASK_SECRET_K
 # Set session permanency and lifetime
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)  # Sessions last 31 days
 app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = os.path.join(os.getcwd(), 'flask_session')
+app.config['SESSION_COOKIE_SECURE'] = True  # Only send cookie over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+
+# Import Flask-Session extension for server-side sessions
+try:
+    from flask_session import Session
+    sess = Session()
+    sess.init_app(app)
+    logger.info("Flask-Session initialized successfully")
+except ImportError:
+    logger.warning("Flask-Session not installed. Using Flask's default client-side sessions.")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Add datetime to Jinja context
@@ -90,6 +103,28 @@ def initialize_app():
             # Try to get user-specific settings if a user is logged in
             if current_user and current_user.is_authenticated:
                 settings = Settings.query.filter_by(user_id=current_user.id).first()
+                
+                # If no settings found for user, create a new settings record
+                if not settings:
+                    logger.info(f"Creating new settings for user ID: {current_user.id}")
+                    settings = Settings(
+                        user_id=current_user.id,
+                        api_provider="schwab",
+                        is_paper_trading=True,
+                        force_simulation_mode=True,
+                        risk_level="moderate",
+                        max_position_size=5000.0,
+                        profit_target_percentage=5.0,
+                        stop_loss_percentage=3.0,
+                        options_expiry_days=30,
+                        enabled_strategies='covered_call',
+                        forex_leverage=10.0,
+                        forex_lot_size=0.1,
+                        forex_pairs_watchlist='EUR/USD,GBP/USD,USD/JPY'
+                    )
+                    db.session.add(settings)
+                    db.session.commit()
+                
                 user_specific = True
                 logger.info(f"Using settings for user ID: {current_user.id}")
             else:
@@ -271,11 +306,22 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data):
+            # Mark the session as permanent if remember me is checked
+            if form.remember.data:
+                session.permanent = True
+            
+            # Login the user with Flask-Login
             login_user(user, remember=form.remember.data)
             
             # Update last login time
             user.last_login = datetime.now()
             db.session.commit()
+            
+            # Set a session variable to track the user's ID explicitly
+            session['user_id'] = user.id
+            
+            # Log user login for debugging
+            logger.info(f"User {user.username} (ID: {user.id}) logged in successfully with remember_me={form.remember.data}")
             
             # Get the next page from query string (or default to dashboard)
             next_page = request.args.get('next')
@@ -328,7 +374,22 @@ def register():
 
 @app.route('/logout')
 def logout():
+    # Get user info for logging
+    if current_user.is_authenticated:
+        user_id = current_user.id
+        username = current_user.username
+        logger.info(f"Logging out user {username} (ID: {user_id})")
+    
+    # Clear Flask-Login session
     logout_user()
+    
+    # Clear custom session variables
+    session.pop('user_id', None)
+    session.pop('prev_path', None)
+    
+    # Reset session permanence
+    session.permanent = False
+    
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 

@@ -19,4 +19,5 @@ dependencies = [
     "trafilatura>=2.0.0",
     "flask-wtf>=1.2.2",
     "oauthlib>=3.2.2",
+    "flask-session>=0.8.0",
 ]
