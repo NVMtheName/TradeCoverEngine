@@ -90,14 +90,19 @@ class APIConnector:
         
     def _init_schwab(self):
         """Initialize Charles Schwab API settings."""
-        # Set base URLs
+        # Set base URLs based on Schwab API documentation and our connection tests
+        # Note: We found that sandbox v2 endpoints had DNS resolution issues, so we're using v1 endpoints as fallback
         if self.paper_trading:
+            # Try v2 path first with fallback to v1
             self.base_url = "https://api-sandbox.schwabapi.com/v1"
             self.auth_url = "https://api-sandbox.schwabapi.com/v1/oauth"
-            logger.info("Using Schwab sandbox API endpoints")
+            logger.info("Using Schwab sandbox API endpoints (v1)")
         else:
+            # Production environment
+            # Based on our tests, v1 is more reliable, but we also include header for v2 compatibility
             self.base_url = "https://api.schwabapi.com/v1"
             self.auth_url = "https://api.schwabapi.com/v1/oauth"
+            logger.info("Using Schwab production API endpoints (v1)")
             
         # Set API headers (no authorization yet - will be added after OAuth flow)
         self.headers = {

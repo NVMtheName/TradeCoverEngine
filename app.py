@@ -742,12 +742,14 @@ def oauth_initiate():
             session['oauth_initiation_time'] = datetime.now().timestamp()
             
             # Get the base URL based on paper trading setting (use the correct format per Schwab API docs)
-            # The correct URL format for Trader API authorization is:
-            # https://api.schwabapi.com/v1/oauth/authorize
+            # The correct URL for Trader API authorization
+            # https://api.schwabapi.com/v1/oauth/authorize (based on connection tests)
             if settings.is_paper_trading:
                 auth_base_url = "https://api-sandbox.schwabapi.com/v1/oauth/authorize"
+                logger.info("Using Schwab sandbox OAuth authorization endpoint (v1)")
             else:
                 auth_base_url = "https://api.schwabapi.com/v1/oauth/authorize"
+                logger.info("Using Schwab production OAuth authorization endpoint (v1)")
             
             # Construct redirect URI for callback
             # Schwab API requirements state the callback URL must use HTTPS
@@ -806,7 +808,7 @@ def oauth_initiate():
                 'client_id': client_id,
                 'redirect_uri': exact_redirect_uri,
                 'response_type': 'code',  # Required for authorization code flow
-                'scope': 'openid profile'  # Required scopes for Schwab API
+                'scope': 'readonly'  # Required scope for Schwab API per their documentation
             }
             
             # For debugging
@@ -960,11 +962,13 @@ def oauth_callback():
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
-                # Use correct token URL format for Schwab Trader API
+                # Use correct token URL format for Schwab Trader API (v2 path structure)
                 if settings.is_paper_trading:
-                    token_url = "https://api-sandbox.schwabapi.com/v1/oauth/token"
+                    token_url = "https://api-sandbox.schwabapi.com/v2/oauth/token"
+                    logger.info("Using Schwab sandbox OAuth token endpoint (v2)")
                 else:
-                    token_url = "https://api.schwabapi.com/v1/oauth/token"
+                    token_url = "https://api.schwabapi.com/v2/oauth/token"
+                    logger.info("Using Schwab production OAuth token endpoint (v2)")
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
