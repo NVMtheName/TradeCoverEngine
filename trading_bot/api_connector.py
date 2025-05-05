@@ -64,6 +64,9 @@ class APIConnector:
             self.base_url = "https://paper-api.alpaca.markets"
         else:
             self.base_url = "https://api.alpaca.markets"
+            
+        # Data API URL is the same for both paper and live trading
+        self.data_url = "https://data.alpaca.markets"
         
         # Set API keys
         self.headers = {
@@ -156,7 +159,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self._check_connection()  # Try again with new token
                     return False
                     
@@ -261,7 +266,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_account_info()  # Try again with new token
                     return self._get_simulated_account_info()
                     
@@ -430,7 +437,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_positions()  # Try again with new token
                     return self._get_simulated_positions()
                     
@@ -681,12 +690,13 @@ class APIConnector:
             
         return result
     
-    def get_stock_data(self, symbol):
+    def get_stock_data(self, symbol, days=30):
         """
         Get comprehensive stock data for a symbol, including price, volume, and other metrics.
         
         Args:
             symbol (str): Stock symbol
+            days (int, optional): Number of days of historical data to include. Defaults to 30.
             
         Returns:
             dict: Stock data including current price, day change, volume, and other metrics
@@ -738,8 +748,10 @@ class APIConnector:
             # Try to get latest quote for volume information
             try:
                 if self.provider == 'alpaca':
+                    # Use base_url as fallback if data_url is not defined
+                    data_url = getattr(self, 'data_url', self.base_url)
                     response = self.session.get(
-                        f"{self.data_url}/v2/stocks/{symbol}/quotes/latest",
+                        f"{data_url}/v2/stocks/{symbol}/quotes/latest",
                         headers=self.headers
                     )
                     
@@ -752,8 +764,10 @@ class APIConnector:
                         
                 # Get trade data for volume
                 if self.provider == 'alpaca':
+                    # Use base_url as fallback if data_url is not defined
+                    data_url = getattr(self, 'data_url', self.base_url)
                     response = self.session.get(
-                        f"{self.data_url}/v2/stocks/{symbol}/trades/latest",
+                        f"{data_url}/v2/stocks/{symbol}/trades/latest",
                         headers=self.headers
                     )
                     
@@ -885,7 +899,9 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        if self._refresh_td_ameritrade_token():
+                        # Handle the case where _refresh_td_ameritrade_token may not exist
+                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        if refresh_method and refresh_method():
                             return self.get_current_price(symbol)  # Try again with new token
                     return self._get_simulated_price(symbol)
                     
