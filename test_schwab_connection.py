@@ -13,10 +13,10 @@ from urllib.parse import urlencode
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('schwab_test')
 
-# Constants - using paths as specified in Schwab documentation
-# According to https://developer.schwab.com/products/trader-api--individual/details/documentation/
-SANDBOX_AUTH_URL = "https://api-sandbox.schwabapi.com/oauth/authorize"
-PRODUCTION_AUTH_URL = "https://api.schwabapi.com/oauth/authorize"
+# Constants - using paths as specified in Schwab production specs
+# According to https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
+SANDBOX_AUTH_URL = "https://api-sandbox.schwabapi.com/oauth2/authorize"
+PRODUCTION_AUTH_URL = "https://api.schwabapi.com/oauth2/authorize"
 
 def test_connection(use_sandbox=True):
     """Test connection to Schwab API authorization endpoint"""
