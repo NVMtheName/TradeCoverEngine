@@ -91,17 +91,17 @@ class APIConnector:
     def _init_schwab(self):
         """Initialize Charles Schwab API settings."""
         # Set base URLs based on Schwab API documentation and our connection tests
-        # Note: We found that sandbox v2 endpoints had DNS resolution issues, so we're using v1 endpoints as fallback
+        # Important: We're now consistently using v1 endpoints as they are more reliable
         if self.paper_trading:
-            # Try v2 path first with fallback to v1
             self.base_url = "https://api-sandbox.schwabapi.com/v1"
-            self.auth_url = "https://api-sandbox.schwabapi.com/v1/oauth"
+            # Note: The auth URL should not include the /oauth part
+            self.auth_url = "https://api-sandbox.schwabapi.com/v1"
             logger.info("Using Schwab sandbox API endpoints (v1)")
         else:
             # Production environment
-            # Based on our tests, v1 is more reliable, but we also include header for v2 compatibility
             self.base_url = "https://api.schwabapi.com/v1"
-            self.auth_url = "https://api.schwabapi.com/v1/oauth"
+            # Note: The auth URL should not include the /oauth part
+            self.auth_url = "https://api.schwabapi.com/v1"
             logger.info("Using Schwab production API endpoints (v1)")
             
         # Set API headers (no authorization yet - will be added after OAuth flow)
@@ -157,7 +157,8 @@ class APIConnector:
             from datetime import datetime, timedelta
             
             # Get the token endpoint URL based on environment
-            token_url = f"{self.auth_url}/token"
+            # For Schwab API, the token URL is /oauth/token
+            token_url = f"{self.auth_url}/oauth/token"
                 
             # Prepare token refresh request based on Schwab API docs
             token_payload = {
