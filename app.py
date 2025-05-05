@@ -634,7 +634,7 @@ def oauth_callback():
             return redirect(url_for('settings'))
             
         if settings.api_provider == 'schwab':
-            # Exchange the authorization code for an access token
+            # Exchange the authorization code for an access token (RFC 6749 Section 4.1.3)
             try:
                 # Log the receipt of the authorization code (truncated for security)
                 logger.info(f"Received OAuth2 authorization code: {code[:5]}...")
@@ -647,14 +647,15 @@ def oauth_callback():
                 
                 # Now perform the actual token exchange
                 import requests
+                # RFC 6749 Section 4.1.3 - Token Exchange Request
                 token_response = requests.post(
                     token_url,
                     data={
                         'grant_type': 'authorization_code',
                         'code': code,
+                        'redirect_uri': redirect_uri,
                         'client_id': settings.api_key,
-                        'client_secret': settings.api_secret,
-                        'redirect_uri': redirect_uri
+                        'client_secret': settings.api_secret
                     },
                     headers={'Content-Type': 'application/x-www-form-urlencoded'}
                 )
@@ -662,10 +663,17 @@ def oauth_callback():
                 logger.info(f"Token exchange response status: {token_response.status_code}")
                 
                 if token_response.status_code == 200:
+                    # RFC 6749 Section 4.1.4 - Successful Token Response
                     token_data = token_response.json()
                     access_token = token_data.get('access_token')
                     refresh_token = token_data.get('refresh_token')
                     expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                    token_type = token_data.get('token_type', 'bearer')
+                    
+                    if not access_token or not refresh_token:
+                        logger.error(f"Invalid token response - missing required tokens: {token_data}")
+                        flash("Authentication failed: Invalid token response from server", 'danger')
+                        return redirect(url_for('settings'))
                     
                     # Store tokens securely
                     from datetime import timedelta
@@ -677,19 +685,20 @@ def oauth_callback():
                     settings.force_simulation_mode = False
                     
                     db.session.commit()
-                    
-                    # Store the authorization code in the session temporarily
-                    session['schwab_auth_code'] = code
+                    logger.info(f"Successfully stored OAuth tokens (access token: {access_token[:5]}..., expires in {expires_in} seconds)")
                     
                     # Reinitialize the app with the new tokens
                     initialize_app()
                     
                     flash('Successfully authenticated with Schwab API!', 'success')
                 else:
-                    # Failed to exchange code for tokens
-                    error_info = token_response.text[:100]  # Truncate long error messages
-                    logger.error(f"Failed to exchange authorization code for tokens: {error_info}")
-                    flash(f"Failed to authenticate with Schwab: {error_info}", 'danger')
+                    # RFC 6749 Section 5.2 - Error Response
+                    error_data = token_response.json() if token_response.headers.get('content-type') == 'application/json' else {}
+                    error = error_data.get('error', 'unknown_error')
+                    error_description = error_data.get('error_description', token_response.text[:100])
+                    
+                    logger.error(f"OAuth error: {error} - {error_description}")
+                    flash(f"Failed to authenticate with Schwab: {error} - {error_description}", 'danger')
             
             except Exception as e:
                 logger.error(f"Error in OAuth2 flow: {str(e)}")
