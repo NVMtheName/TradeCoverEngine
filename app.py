@@ -689,7 +689,7 @@ def test_api_connection():
         
 @app.route('/oauth/initiate')
 def oauth_initiate():
-    """Start OAuth2 authorization flow"""
+    """Start OAuth2 authorization flow for 3-legged OAuth authentication"""
     try:
         provider = request.args.get('provider', 'schwab')
         
@@ -697,14 +697,44 @@ def oauth_initiate():
         if current_user.is_authenticated:
             settings = Settings.query.filter_by(user_id=current_user.id).first()
             logger.info(f"Initiating OAuth flow for user ID: {current_user.id}")
+            if not settings:
+                logger.warning(f"No settings found for user ID: {current_user.id}, creating new settings")
+                settings = Settings(
+                    user_id=current_user.id,
+                    api_provider="schwab",
+                    is_paper_trading=True,
+                    force_simulation_mode=True
+                )
+                db.session.add(settings)
+                db.session.commit()
         else:
-            settings = Settings.query.first()
-            logger.info("Initiating OAuth flow with default settings (no user logged in)")
+            flash("You must be logged in to use OAuth authentication", 'warning')
+            return redirect(url_for('login'))
         
         if provider == 'schwab':
+            # Ensure we have client credentials configured
+            if not settings.api_key or not settings.api_secret:
+                # Check environment variables for credentials
+                env_api_key = os.environ.get("SCHWAB_API_KEY")
+                env_api_secret = os.environ.get("SCHWAB_API_SECRET")
+                
+                if env_api_key and env_api_secret:
+                    settings.api_key = env_api_key
+                    settings.api_secret = env_api_secret
+                    db.session.commit()
+                    logger.info("Applied Schwab API credentials from environment variables")
+                else:
+                    flash("Missing API Key and Secret. Please configure your API credentials in settings first.", 'danger')
+                    return redirect(url_for('settings'))
+            
             # Generate a state parameter to prevent CSRF attacks
             state = os.urandom(16).hex()
             session['oauth_state'] = state
+            
+            # Store additional OAuth session data
+            session['oauth_provider'] = provider
+            session['oauth_user_id'] = current_user.id
+            session['oauth_initiation_time'] = datetime.now().timestamp()
             
             # Get the base URL based on paper trading setting
             auth_base_url = "https://api-sandbox.schwab.com/v1/oauth2/authorize" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/authorize"
@@ -712,8 +742,9 @@ def oauth_initiate():
             # Construct redirect URI for callback
             redirect_uri = url_for('oauth_callback', _external=True)
             
-            # Create the real authorization URL
-            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts,trading&state={state}"
+            # Create the authorization URL with appropriate scopes
+            # Scopes: accounts,trading,market_data,profile
+            auth_url = f"{auth_base_url}?response_type=code&client_id={settings.api_key}&redirect_uri={redirect_uri}&scope=accounts trading market_data profile&state={state}"
             
             logger.info(f"Using Schwab API key: {settings.api_key[:4]}...{settings.api_key[-4:] if len(settings.api_key) > 8 else '****'} for OAuth flow")
             logger.info(f"Redirect URI: {redirect_uri}")
@@ -721,13 +752,9 @@ def oauth_initiate():
             # Show the callback URL for configuration purposes
             flash(f"The callback URL to register in your Schwab Developer account is: {redirect_uri}", 'info')
             
-            # For now, we'll still display the link rather than redirect
-            # until the user has properly registered the callback URL
-            flash(f"<a href='{auth_url}' class='alert-link'>Click here to authorize with Schwab</a>", 'info')
-            
-            return redirect(url_for('settings'))
-            
-            return redirect(url_for('settings'))
+            # Now directly redirect to Schwab's authorization page
+            logger.info(f"Redirecting user to Schwab OAuth authorization page")
+            return redirect(auth_url)
         else:
             flash(f"OAuth flow not implemented for provider: {provider}", 'warning')
             return redirect(url_for('settings'))
@@ -738,34 +765,57 @@ def oauth_initiate():
 
 @app.route('/oauth/callback')
 def oauth_callback():
-    """Callback endpoint for OAuth2 authentication flow"""
+    """Callback endpoint for OAuth2 authorization flow in 3-legged OAuth authentication"""
     try:
-        # Get the authorization code from the query parameters
+        # Get the authorization code and state from the query parameters
         code = request.args.get('code')
         state = request.args.get('state')
+        error = request.args.get('error')
+        error_description = request.args.get('error_description')
         
-        # Get the settings for the current user if logged in
-        if current_user.is_authenticated:
-            settings = Settings.query.filter_by(user_id=current_user.id).first()
-            logger.info(f"Processing OAuth callback for user ID: {current_user.id}")
-        else:
-            settings = Settings.query.first()
-            logger.info("Processing OAuth callback with default settings (no user logged in)")
+        # Log basic information about the callback
+        logger.info(f"OAuth callback received: code={bool(code)}, state={bool(state)}, error={error}")
         
+        # Check for OAuth error response (RFC 6749 Section 4.1.2.1)
+        if error:
+            logger.error(f"OAuth authorization error: {error} - {error_description}")
+            flash(f"Authorization failed: {error_description or error}", 'danger')
+            return redirect(url_for('settings'))
+        
+        # Validate required parameters
         if not code:
-            flash('Authentication failed: No authorization code received.', 'danger')
+            flash('Authentication failed: No authorization code received', 'danger')
             return redirect(url_for('settings'))
-            
-        # Verify state parameter to prevent CSRF attacks
+        
+        # Verify state parameter to prevent CSRF attacks (RFC 6749 Section 10.12)
         if state != session.get('oauth_state'):
-            flash('Authentication failed: Invalid state parameter.', 'danger')
+            logger.error(f"OAuth state mismatch: received={state}, stored={session.get('oauth_state')}")
+            flash('Authentication failed: Invalid state parameter (potential CSRF attack)', 'danger')
             return redirect(url_for('settings'))
             
-        if settings.api_provider == 'schwab':
+        # Get user info from session
+        oauth_provider = session.get('oauth_provider')
+        oauth_user_id = session.get('oauth_user_id')
+        
+        # Verify session data
+        if not oauth_provider or not oauth_user_id:
+            logger.error("Missing OAuth session data, can't determine user or provider")
+            flash('Authentication failed: Session data lost, please try again', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Retrieve user settings
+        settings = Settings.query.filter_by(user_id=oauth_user_id).first()
+        if not settings:
+            logger.error(f"No settings found for user ID {oauth_user_id}")
+            flash('Authentication failed: User settings not found', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Process based on the provider
+        if oauth_provider == 'schwab':
             # Exchange the authorization code for an access token (RFC 6749 Section 4.1.3)
             try:
-                # Log the receipt of the authorization code (truncated for security)
-                logger.info(f"Received OAuth2 authorization code: {code[:5]}...")
+                # Log the authorization code (truncated for security)
+                logger.info(f"Processing authorization code: {code[:5]}...")
                 
                 # Get the token endpoint based on paper trading setting
                 token_url = "https://api-sandbox.schwab.com/v1/oauth2/token" if settings.is_paper_trading else "https://api.schwab.com/v1/oauth2/token"
@@ -773,69 +823,138 @@ def oauth_callback():
                 # Construct redirect URI for callback (must match the one used in authorization request)
                 redirect_uri = url_for('oauth_callback', _external=True)
                 
-                # Now perform the actual token exchange
+                # Now perform the token exchange
                 import requests
-                # RFC 6749 Section 4.1.3 - Token Exchange Request
+                from urllib.parse import urlencode
+                
+                # Prepare the token request payload (RFC 6749 Section 4.1.3)
+                token_payload = {
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri,
+                    'client_id': settings.api_key,
+                    'client_secret': settings.api_secret
+                }
+                
+                # Log the token exchange request (excluding sensitive data)
+                logger.info(f"Exchanging authorization code for tokens at {token_url}")
+                logger.info(f"Using redirect_uri: {redirect_uri}")
+                
+                # Make the token exchange request
                 token_response = requests.post(
                     token_url,
-                    data={
-                        'grant_type': 'authorization_code',
-                        'code': code,
-                        'redirect_uri': redirect_uri,
-                        'client_id': settings.api_key,
-                        'client_secret': settings.api_secret
+                    data=token_payload,
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
                     },
-                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                    timeout=15  # Longer timeout for token exchange
                 )
                 
                 logger.info(f"Token exchange response status: {token_response.status_code}")
                 
                 if token_response.status_code == 200:
-                    # RFC 6749 Section 4.1.4 - Successful Token Response
+                    # Process successful token response (RFC 6749 Section 4.1.4)
                     token_data = token_response.json()
+                    
+                    # Extract token data
                     access_token = token_data.get('access_token')
                     refresh_token = token_data.get('refresh_token')
                     expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
-                    token_type = token_data.get('token_type', 'bearer')
+                    token_type = token_data.get('token_type', 'Bearer')
+                    scope = token_data.get('scope', '')
                     
-                    if not access_token or not refresh_token:
-                        logger.error(f"Invalid token response - missing required tokens: {token_data}")
+                    # Validate required tokens
+                    if not access_token:
+                        logger.error("Missing access_token in token response")
                         flash("Authentication failed: Invalid token response from server", 'danger')
                         return redirect(url_for('settings'))
                     
-                    # Store tokens securely
+                    if not refresh_token:
+                        logger.warning("Missing refresh_token in token response - this may affect longevity of access")
+                    
+                    # Store tokens securely in the database
                     from datetime import timedelta
                     settings.oauth_access_token = access_token
                     settings.oauth_refresh_token = refresh_token
                     settings.oauth_token_expiry = datetime.now() + timedelta(seconds=expires_in)
                     
-                    # Turn off simulation mode now that we have real tokens
+                    # Disable simulation mode now that we have real API access
                     settings.force_simulation_mode = False
                     
+                    # Save changes to database
                     db.session.commit()
-                    logger.info(f"Successfully stored OAuth tokens (access token: {access_token[:5]}..., expires in {expires_in} seconds)")
                     
-                    # Reinitialize the app with the new tokens
-                    initialize_app()
+                    # Log success (with minimal token info for security)
+                    logger.info(f"Successfully obtained OAuth tokens (access: {access_token[:5]}..., expires in: {expires_in}s)")
+                    logger.info(f"Granted scopes: {scope}")
                     
-                    flash('Successfully authenticated with Schwab API!', 'success')
+                    # Update API connector with new tokens
+                    try:
+                        global api_connector
+                        if api_connector and api_connector.provider == 'schwab':
+                            api_connector.access_token = access_token
+                            api_connector.refresh_token = refresh_token
+                            api_connector.token_expiry = settings.oauth_token_expiry
+                            
+                            # Update authorization header
+                            api_connector.session.headers.update({
+                                'Authorization': f'{token_type} {access_token}'
+                            })
+                            
+                            logger.info("Updated API connector with new OAuth tokens")
+                        else:
+                            # Reinitialize the app with the new tokens
+                            logger.info("Reinitializing app to apply new OAuth tokens")
+                            initialize_app()
+                    except Exception as connector_error:
+                        logger.error(f"Error updating API connector: {str(connector_error)}")
+                    
+                    # Clean up session data
+                    if 'oauth_state' in session:
+                        del session['oauth_state']
+                    if 'oauth_provider' in session:
+                        del session['oauth_provider']
+                    if 'oauth_initiation_time' in session:
+                        del session['oauth_initiation_time']
+                    
+                    # Notify user of success
+                    flash('Successfully authenticated with Schwab API! You can now use the trading features.', 'success')
                 else:
-                    # RFC 6749 Section 5.2 - Error Response
-                    error_data = token_response.json() if token_response.headers.get('content-type') == 'application/json' else {}
-                    error = error_data.get('error', 'unknown_error')
-                    error_description = error_data.get('error_description', token_response.text[:100])
+                    # Process error response (RFC 6749 Section 5.2)
+                    try:
+                        error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
+                    except ValueError:
+                        error_content = {}
                     
-                    logger.error(f"OAuth error: {error} - {error_description}")
-                    flash(f"Failed to authenticate with Schwab: {error} - {error_description}", 'danger')
+                    error_type = error_content.get('error', 'server_error')
+                    error_desc = error_content.get('error_description', token_response.text[:100])
+                    
+                    # Log detailed error information
+                    logger.error(f"OAuth token exchange error: {error_type} - {error_desc}")
+                    logger.error(f"Response status: {token_response.status_code}, Headers: {dict(token_response.headers)}")
+                    
+                    # Provide user-friendly error message
+                    if error_type == 'invalid_grant':
+                        flash("Authentication failed: Invalid or expired authorization code", 'danger')
+                    elif error_type == 'invalid_client':
+                        flash("Authentication failed: Invalid API key or secret", 'danger')
+                    else:
+                        flash(f"Failed to authenticate with Schwab: {error_desc or error_type}", 'danger')
             
             except Exception as e:
-                logger.error(f"Error in OAuth2 flow: {str(e)}")
-                flash(f"Error in authentication flow: {str(e)}", 'danger')
+                logger.error(f"Error in OAuth2 token exchange: {str(e)}")
+                flash(f"Authentication error: {str(e)}", 'danger')
+        else:
+            # Unsupported provider
+            logger.error(f"OAuth callback for unsupported provider: {oauth_provider}")
+            flash(f"OAuth authentication not implemented for provider: {oauth_provider}", 'warning')
         
+        # Redirect to settings page
         return redirect(url_for('settings'))
     except Exception as e:
-        logger.error(f"Error in OAuth callback: {str(e)}")
-        flash(f"Error in authentication flow: {str(e)}", 'danger')
+        logger.error(f"Unhandled error in OAuth callback: {str(e)}")
+        flash(f"Authentication error: {str(e)}", 'danger')
         return redirect(url_for('settings'))
 
 # Error handling
