@@ -5,6 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
+from urllib.parse import urlparse
 from datetime import datetime
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 
@@ -39,6 +40,9 @@ db.init_app(app)
 
 # Import models after initializing db
 from models import User, Settings, Trade, WatchlistItem
+
+# Import forms
+from forms import LoginForm, RegistrationForm
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -185,11 +189,88 @@ def before_request():
         initialize_app()
 
 # Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # If user is already logged in, redirect to dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        
+        if user and user.check_password(form.password.data):
+            login_user(user, remember=form.remember.data)
+            
+            # Update last login time
+            user.last_login = datetime.now()
+            db.session.commit()
+            
+            # Get the next page from query string (or default to dashboard)
+            next_page = request.args.get('next')
+            if not next_page or urlparse(next_page).netloc != '':
+                next_page = url_for('dashboard')
+                
+            flash('Login successful!', 'success')
+            return redirect(next_page)
+        else:
+            flash('Invalid username or password', 'danger')
+    
+    return render_template('login.html', form=form)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    # If user is already logged in, redirect to dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        
+        # Create user-specific settings
+        settings = Settings(
+            user=user,
+            api_provider="schwab",
+            is_paper_trading=True,
+            force_simulation_mode=True,
+            risk_level="moderate",
+            max_position_size=5000.0,
+            profit_target_percentage=5.0,
+            stop_loss_percentage=3.0,
+            options_expiry_days=30,
+            enabled_strategies='covered_call',
+            forex_leverage=10.0,
+            forex_lot_size=0.1,
+            forex_pairs_watchlist='EUR/USD,GBP/USD,USD/JPY'
+        )
+        
+        db.session.add(user)
+        db.session.add(settings)
+        db.session.commit()
+        
+        flash('Registration successful! You can now log in.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
+    # If user is already logged in, redirect to dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
     return render_template('index.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     # Get account info and recent trades
     account_info = {}
@@ -232,6 +313,7 @@ def dashboard():
     )
 
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
     settings = Settings.query.first()
     
@@ -274,11 +356,13 @@ def settings():
     return render_template('settings.html', settings=settings)
 
 @app.route('/trades')
+@login_required
 def trades():
     all_trades = Trade.query.order_by(Trade.timestamp.desc()).all()
     return render_template('trades.html', trades=all_trades)
 
 @app.route('/analysis')
+@login_required
 def analysis():
     # Get stock symbols for analysis
     watchlist = []
@@ -299,6 +383,7 @@ def analysis():
     return render_template('analysis.html', watchlist=watchlist, opportunities=opportunities)
 
 @app.route('/watchlist/add', methods=['POST'])
+@login_required
 def add_to_watchlist():
     symbol = request.form.get('symbol', '').strip().upper()
     
@@ -325,6 +410,7 @@ def add_to_watchlist():
     return redirect(url_for('analysis'))
 
 @app.route('/watchlist/remove/<symbol>', methods=['POST'])
+@login_required
 def remove_from_watchlist(symbol):
     try:
         watchlist_item = WatchlistItem.query.filter_by(symbol=symbol).first()
@@ -339,6 +425,7 @@ def remove_from_watchlist(symbol):
     return redirect(url_for('analysis'))
 
 @app.route('/execute/covered-call', methods=['POST'])
+@login_required
 def execute_covered_call():
     symbol = request.form.get('symbol')
     expiry_date = request.form.get('expiry_date')
@@ -545,6 +632,7 @@ def oauth_callback():
 # Error handling
 # Auto trading routes
 @app.route('/auto-trading')
+@login_required
 def auto_trading():
     """Display auto trading status and controls"""
     status = {}
