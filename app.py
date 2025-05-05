@@ -30,6 +30,7 @@ app.config['SESSION_FILE_DIR'] = os.path.join(os.getcwd(), 'flask_session')
 app.config['SESSION_COOKIE_SECURE'] = True  # Only send cookie over HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['SESSION_COOKIE_NAME'] = 'trading_bot_session'  # Custom cookie name
 
 # Import Flask-Session extension for server-side sessions
 try:
@@ -306,12 +307,23 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data):
-            # Mark the session as permanent if remember me is checked
+            # Set up session based on remember preference
             if form.remember.data:
+                # If remember me is checked, make session permanent with our long expiry
                 session.permanent = True
-            
-            # Login the user with Flask-Login
-            login_user(user, remember=form.remember.data)
+                # Login with remember=True for Flask-Login's cookie
+                login_user(user, remember=True)
+                logger.info(f"Setting permanent session for user {user.username}")
+            else:
+                # If remember me is not checked, use standard session lifetime
+                session.permanent = False
+                # Set a shorter session expiry for non-remembered sessions (1 day)
+                app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+                # Login with remember=False
+                login_user(user, remember=False)
+                # Reset the session lifetime back to the longer period for future remembered sessions
+                app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
+                logger.info(f"Setting temporary session for user {user.username}")
             
             # Update last login time
             user.last_login = datetime.now()
@@ -447,7 +459,29 @@ def dashboard():
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
+    # Ensure user has settings
     settings = Settings.query.filter_by(user_id=current_user.id).first()
+    
+    # If no settings found for user, create a new settings record
+    if not settings:
+        logger.info(f"Creating new settings for user ID: {current_user.id} during settings page access")
+        settings = Settings(
+            user_id=current_user.id,
+            api_provider="schwab",
+            is_paper_trading=True,
+            force_simulation_mode=True,
+            risk_level="moderate",
+            max_position_size=5000.0,
+            profit_target_percentage=5.0,
+            stop_loss_percentage=3.0,
+            options_expiry_days=30,
+            enabled_strategies='covered_call',
+            forex_leverage=10.0,
+            forex_lot_size=0.1,
+            forex_pairs_watchlist='EUR/USD,GBP/USD,USD/JPY'
+        )
+        db.session.add(settings)
+        db.session.commit()
     
     if request.method == 'POST':
         try:
