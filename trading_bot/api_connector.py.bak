@@ -272,7 +272,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self._check_connection()  # Try again with new token
                     return False
                     
@@ -398,7 +398,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_account_info()  # Try again with new token
                     return self._get_simulated_account_info()
                     
@@ -569,7 +569,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_positions()  # Try again with new token
                     return self._get_simulated_positions()
                     
@@ -1031,7 +1031,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_current_price(symbol)  # Try again with new token
                     return self._get_simulated_price(symbol)
                     
@@ -1242,7 +1242,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_historical_data(symbol, timeframe, limit)  # Try again with new token
                     return self._get_simulated_historical_data(symbol, timeframe, limit)
                     
@@ -1482,7 +1482,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_options_chain(symbol)  # Try again with new token
                     return self._get_simulated_options_chain(symbol)
                     
@@ -1742,7 +1742,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.place_order(order_details, account_id)  # Try again with new token
                     return {
                         'success': False,
@@ -1941,7 +1941,7 @@ class APIConnector:
                         logger.info("Attempting to refresh access token")
                         # Handle the case where _refresh_td_ameritrade_token may not exist
                         refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
-                        if self.refresh_access_token():
+                        if refresh_method and refresh_method():
                             return self.get_market_hours()  # Try again with new token
                     return self._get_simulated_market_hours()
                     
@@ -2115,9 +2115,7 @@ class APIConnector:
                 # Random walk with slight upward drift
                 pct_change = random.gauss(0.0005, 0.01)  # Slight positive drift
                 new_equity = equities[-1] * (1 + pct_change)
-                # Use float formatting to avoid type issues with round()
-                new_equity_rounded = float(f"{new_equity:.2f}")
-                equities.append(new_equity_rounded)
+                equities.append(round(new_equity, 2))
                 
         # Create DataFrame
         df = pd.DataFrame({
