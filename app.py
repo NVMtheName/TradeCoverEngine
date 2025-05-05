@@ -69,7 +69,13 @@ from models import User, Settings, Trade, WatchlistItem
 
 # Import and register the Schwab proxy blueprint after app initialization
 from schwab_proxy import schwab_proxy
+
+# Register the Schwab proxy blueprint
 app.register_blueprint(schwab_proxy)
+
+# Set up sandbox mode configuration for the proxy
+# This will be used by the proxy to determine which API endpoints to use
+app.config['USE_SANDBOX'] = os.environ.get('USE_SCHWAB_SANDBOX', 'true').lower() == 'true'
 
 # Configure sandbox status
 app.config['USE_SANDBOX'] = os.environ.get('USE_SANDBOX', 'true').lower() == 'true'  # Default to sandbox
@@ -837,6 +843,9 @@ def oauth_initiate():
             try:
                 # Set up sandbox/production mode in the session for the proxy
                 session['oauth_is_sandbox'] = settings.is_paper_trading
+                
+                # Update the app config to use the correct environment
+                app.config['USE_SANDBOX'] = settings.is_paper_trading
                 
                 # Build a URL to our proxy endpoint instead of directly to Schwab
                 # This avoids CORS issues since our server will make the request

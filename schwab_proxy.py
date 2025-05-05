@@ -10,7 +10,7 @@ from the server-side to avoid CORS restrictions in the browser.
 import os
 import logging
 import requests
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,7 +25,9 @@ def proxy_oauth_authorize():
     params = request.args.to_dict()
     
     # Determine if we're using sandbox or production based on settings
-    is_sandbox = current_app.config.get('USE_SANDBOX', False)
+    # First check the session, then fall back to app config
+    is_sandbox = session.get('oauth_is_sandbox', current_app.config.get('USE_SANDBOX', False))
+    logger.info(f"Using sandbox mode for OAuth authorization: {is_sandbox}")
     
     # Construct the appropriate base URL
     if is_sandbox:
@@ -80,7 +82,9 @@ def proxy_oauth_token():
     data = request.form.to_dict()
     
     # Determine if we're using sandbox or production based on settings
-    is_sandbox = current_app.config.get('USE_SANDBOX', False)
+    # First check the session, then fall back to app config
+    is_sandbox = session.get('oauth_is_sandbox', current_app.config.get('USE_SANDBOX', False))
+    logger.info(f"Using sandbox mode for OAuth token exchange: {is_sandbox}")
     
     # Construct the appropriate base URL
     if is_sandbox:
