@@ -270,8 +270,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self._check_connection()  # Try again with new token
                     return False
@@ -396,8 +395,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_account_info()  # Try again with new token
                     return self._get_simulated_account_info()
@@ -567,8 +565,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_positions()  # Try again with new token
                     return self._get_simulated_positions()
@@ -1029,8 +1026,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_current_price(symbol)  # Try again with new token
                     return self._get_simulated_price(symbol)
@@ -1240,8 +1236,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_historical_data(symbol, timeframe, limit)  # Try again with new token
                     return self._get_simulated_historical_data(symbol, timeframe, limit)
@@ -1480,8 +1475,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_options_chain(symbol)  # Try again with new token
                     return self._get_simulated_options_chain(symbol)
@@ -1740,8 +1734,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.place_order(order_details, account_id)  # Try again with new token
                     return {
@@ -1939,8 +1932,7 @@ class APIConnector:
                     # Try to refresh token if unauthorized
                     if response.status_code == 401 and self.refresh_token:
                         logger.info("Attempting to refresh access token")
-                        # Handle the case where _refresh_td_ameritrade_token may not exist
-                        refresh_method = getattr(self, '_refresh_td_ameritrade_token', None)
+                        # Use standardized refresh access token method
                         if self.refresh_access_token():
                             return self.get_market_hours()  # Try again with new token
                     return self._get_simulated_market_hours()
