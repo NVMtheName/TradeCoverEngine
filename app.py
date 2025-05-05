@@ -119,6 +119,7 @@ def initialize_app():
             api_key = settings.api_key or os.environ.get("SCHWAB_API_KEY")
             api_secret = settings.api_secret or os.environ.get("SCHWAB_API_SECRET")
             
+            # Initialize API connector
             api_connector = APIConnector(
                 provider=settings.api_provider,
                 api_key=api_key,
@@ -126,6 +127,34 @@ def initialize_app():
                 paper_trading=settings.is_paper_trading,
                 force_simulation=use_sim_mode
             )
+            
+            # If we're using Schwab and have OAuth tokens, update the connector
+            if settings.api_provider == 'schwab' and settings.oauth_access_token:
+                # Pass OAuth tokens to the connector
+                logger.info(f"Passing OAuth tokens to API connector (access token: {settings.oauth_access_token[:5]}...)")
+                api_connector.access_token = settings.oauth_access_token
+                api_connector.refresh_token = settings.oauth_refresh_token
+                api_connector.token_expiry = settings.oauth_token_expiry
+                
+                # Update Authorization header
+                api_connector.session.headers.update({
+                    'Authorization': f'Bearer {settings.oauth_access_token}'
+                })
+                
+                # Check if token needs refresh
+                if api_connector.is_token_expired() and settings.oauth_refresh_token:
+                    logger.info("OAuth token expired, attempting refresh during initialization")
+                    refresh_success = api_connector.refresh_access_token()
+                    
+                    if refresh_success:
+                        # Update the settings with new tokens
+                        settings.oauth_access_token = api_connector.access_token
+                        settings.oauth_refresh_token = api_connector.refresh_token
+                        settings.oauth_token_expiry = api_connector.token_expiry
+                        db.session.commit()
+                        logger.info("Successfully refreshed and stored new OAuth tokens")
+                    else:
+                        logger.warning("Failed to refresh OAuth tokens during initialization")
             
             stock_analyzer = StockAnalyzer(api_connector)
             

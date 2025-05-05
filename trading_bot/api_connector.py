@@ -79,65 +79,167 @@ class APIConnector:
         """Initialize Charles Schwab API connection"""
         self.session = requests.Session()
         
+        # Initialize OAuth token fields
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expiry = None
+        
         # Updated Schwab API endpoints based on the latest documentation
-        # Using temporary domains that should be more accessible from Replit environment
-        # Note: For real Schwab API use, you need to confirm the correct endpoints
         if self.paper_trading:
-            # For testing purposes - we'll use a reliable domain to avoid DNS resolution issues
-            self.base_url = "https://api.schwabapi.com/v1"
-            logger.warning("Using temporary Schwab API URL for testing purposes")
-            
-            # For robust error reporting
-            try:
-                # Test basic connectivity to a reliable domain
-                test_response = requests.get("https://httpbin.org/get", timeout=5)
-                logger.info(f"Test connection status: {test_response.status_code}")
-            except Exception as e:
-                logger.error(f"Test connection failed: {str(e)}")
+            self.base_url = "https://api-sandbox.schwab.com/v1"
+            self.token_url = "https://api-sandbox.schwab.com/v1/oauth2/token"
+            logger.info("Using Schwab sandbox API endpoints")
         else:
             self.base_url = "https://api.schwab.com/v1"
-            logger.warning("Using Schwab production API")
+            self.token_url = "https://api.schwab.com/v1/oauth2/token"
+            logger.info("Using Schwab production API endpoints")
+        
+        # For robust error reporting
+        try:
+            # Test basic connectivity to a reliable domain
+            test_response = requests.get("https://httpbin.org/get", timeout=5)
+            logger.info(f"Test connection status: {test_response.status_code}")
+        except Exception as e:
+            logger.error(f"Test connection failed: {str(e)}")
         
         # Log warning about Schwab API registration requirements
-        logger.warning("To use the Schwab API, you need to register your application and IP addresses with Schwab Developer Center. See https://developer.schwab.com/get-started for details.")
-        logger.warning("You must register your application and receive OAuth2 credentials. The API key should be your OAuth client_id and API secret should be your client_secret.")
-        logger.warning("For development purposes, you may want to use Alpaca which offers unrestricted paper trading API access.")
+        logger.warning("To use the Schwab API, you need to register your application for OAuth2 access.")
+        logger.warning("Your API key is your OAuth2 client_id and your API secret is your client_secret.")
         
         # Schwab APIs require OAuth2 authentication with proper registration
         if self.api_key and self.api_secret:
-            # The API key should be used as the client_id for OAuth2
+            # Store OAuth credentials
             self.client_id = self.api_key
             self.client_secret = self.api_secret
             
-            # Set up proper authentication headers
+            # Set default headers
             self.session.headers.update({
-                'Authorization': f'Bearer {self.api_key}',
-                'X-API-Secret': self.api_secret,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             })
             
             # Obscure the API key in logs for security
             masked_key = f"{self.api_key[:4]}...{self.api_key[-4:]}" if len(self.api_key) > 8 else "****"
-            logger.info(f"Initialized Charles Schwab API connector with API key: {masked_key}")
+            logger.info(f"Initialized Charles Schwab API connector with client ID: {masked_key}")
             logger.info(f"Paper trading mode: {self.paper_trading}")
+            
+            # Check for access token in environment or from database
+            # This would be set by the OAuth callback handler
+            try:
+                # Look for access token in environment variables or settings
+                from datetime import datetime
+                import os
+                
+                # Try to get from environment first (for testing)
+                self.access_token = os.environ.get("SCHWAB_ACCESS_TOKEN")
+                self.refresh_token = os.environ.get("SCHWAB_REFRESH_TOKEN")
+                
+                # If tokens are available, update the session headers
+                if self.access_token:
+                    logger.info(f"Found access token: {self.access_token[:5]}...")
+                    self.session.headers.update({
+                        'Authorization': f'Bearer {self.access_token}'
+                    })
+            except Exception as e:
+                logger.error(f"Error retrieving access token: {str(e)}")
         else:
             logger.warning("Missing API credentials. Please configure API settings.")
-            
-        # Add special message about Schwab API access
-        logger.warning("NOTE: To use Charles Schwab API, you need to register your application and IP addresses with Schwab Developer Center. See https://developer.schwab.com/get-started for details.")
-        logger.warning("You must register your application and receive OAuth2 credentials. The API key should be your OAuth client_id and API secret should be your client_secret.")
-        logger.warning("For development purposes, you may want to use Alpaca which offers unrestricted paper trading API access.")
         
-        # Check if we have valid credentials
-        if self.api_key and self.api_secret:
-            logger.info("Attempting to validate Schwab API credentials...")
-        else:
-            logger.warning("Cannot validate Schwab API credentials - missing API key or secret.")
-            
         # Track API status for UI display
         self.api_status = "Not Connected"
-        self.api_status_details = "API credentials not validated"
+        self.api_status_details = "OAuth tokens not validated"
+    
+    def is_token_expired(self):
+        """
+        Check if the OAuth token is expired.
+        
+        Returns:
+            bool: True if token is expired, False if valid or not applicable
+        """
+        if not hasattr(self, 'token_expiry') or not self.token_expiry:
+            # If no expiry is set, assume token is expired/invalid
+            return True
+            
+        from datetime import datetime, timedelta
+        
+        # Add a 5-minute buffer to account for clock skew and processing time
+        buffer_time = timedelta(minutes=5)
+        current_time = datetime.now()
+        
+        # Return True if token is expired or close to expiring
+        return current_time + buffer_time >= self.token_expiry
+    
+    def refresh_access_token(self):
+        """
+        Refresh the OAuth2 access token using the refresh token.
+        
+        Returns:
+            bool: True if token was successfully refreshed, False otherwise
+        """
+        if not self.refresh_token or not self.client_id or not self.client_secret:
+            logger.error("Cannot refresh token: missing refresh token or client credentials")
+            return False
+            
+        try:
+            # Prepare the token refresh request per RFC 6749 Section 6
+            refresh_data = {
+                'grant_type': 'refresh_token',
+                'refresh_token': self.refresh_token,
+                'client_id': self.client_id,
+                'client_secret': self.client_secret
+            }
+            
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            
+            logger.info(f"Attempting to refresh token at {self.token_url}")
+            token_response = requests.post(
+                self.token_url,
+                data=refresh_data,
+                headers=headers,
+                timeout=10
+            )
+            
+            if token_response.status_code == 200:
+                # Successfully refreshed the token
+                token_data = token_response.json()
+                
+                # Update our tokens
+                self.access_token = token_data.get('access_token')
+                
+                # Not all OAuth2 implementations return a new refresh token
+                new_refresh_token = token_data.get('refresh_token')
+                if new_refresh_token:
+                    self.refresh_token = new_refresh_token
+                    
+                # Update token expiry
+                from datetime import datetime, timedelta
+                expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                
+                # Update authorization header
+                self.session.headers.update({
+                    'Authorization': f'Bearer {self.access_token}'
+                })
+                
+                # Update DB with new tokens if appropriate
+                # This would happen in the Flask app context
+                
+                logger.info(f"Successfully refreshed access token. New token expires in {expires_in} seconds")
+                return True
+            else:
+                # Failed to refresh the token
+                error_data = token_response.json() if token_response.headers.get('content-type') == 'application/json' else {}
+                error = error_data.get('error', 'unknown_error')
+                error_description = error_data.get('error_description', token_response.text[:100])
+                
+                logger.error(f"Failed to refresh token: {error} - {error_description}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error refreshing access token: {str(e)}")
+            return False
     
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""
@@ -173,16 +275,60 @@ class APIConnector:
                     
                     # Check if we have API credentials
                     if self.api_key and self.api_secret:
+                        # Check if we have a valid access token
+                        if not self.access_token:
+                            logger.warning("No access token available for Schwab API - OAuth2 authentication required")
+                            self.api_status = "Not Authenticated"
+                            self.api_status_details = "OAuth2 authentication required"
+                            # Fall back to simulation mode for testing
+                            logger.warning("Falling back to simulation mode")
+                            return False
+                        
+                        # Check if token is expired and refresh if needed
+                        if self.is_token_expired() and self.refresh_token:
+                            logger.info("Access token expired, attempting to refresh...")
+                            refresh_success = self.refresh_access_token()
+                            if not refresh_success:
+                                logger.error("Failed to refresh access token")
+                                self.api_status = "Authentication Failed"
+                                self.api_status_details = "Token refresh failed"
+                                return False
+                        
                         # Try to connect to the Schwab API
                         try:
-                            # Attempt real API connection
+                            # Attempt real API connection with Bearer token
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
+                            })
+                            
                             response = self.session.get(f"{self.base_url}/accounts", timeout=10)
                             
                             if response.status_code == 200:
-                                logger.info("Successfully connected to Schwab API")
+                                logger.info("Successfully connected to Schwab API with OAuth2 token")
                                 self.api_status = "Connected"
                                 self.api_status_details = "API connection successful"
                                 return True
+                            elif response.status_code == 401 and self.refresh_token:
+                                # Unauthorized - try refreshing token
+                                logger.warning("Received 401 Unauthorized - attempting token refresh")
+                                refresh_success = self.refresh_access_token()
+                                if refresh_success:
+                                    # Try again with new token
+                                    self.session.headers.update({
+                                        'Authorization': f'Bearer {self.access_token}'
+                                    })
+                                    response = self.session.get(f"{self.base_url}/accounts", timeout=10)
+                                    if response.status_code == 200:
+                                        logger.info("Successfully connected after token refresh")
+                                        self.api_status = "Connected"
+                                        self.api_status_details = "API connection successful after token refresh"
+                                        return True
+                                
+                                # If we're here, refresh didn't help
+                                logger.warning(f"Schwab API connection failed after token refresh: {response.status_code}")
+                                self.api_status = "Authentication Failed"
+                                self.api_status_details = "Token refresh failed"
+                                return False
                             else:
                                 logger.warning(f"Schwab API connection failed with status code {response.status_code}")
                                 self.api_status = "Error"
