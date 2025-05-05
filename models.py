@@ -35,10 +35,15 @@ class Settings(db.Model):
     
     # API settings
     api_provider = db.Column(db.String(50), default='alpaca')  # Options: alpaca, td_ameritrade, etc.
-    api_key = db.Column(db.String(100))
-    api_secret = db.Column(db.String(100))
+    api_key = db.Column(db.String(255))  # Client ID for OAuth2
+    api_secret = db.Column(db.String(255))  # Client Secret for OAuth2
     is_paper_trading = db.Column(db.Boolean, default=True)
     force_simulation_mode = db.Column(db.Boolean, default=False)  # Force simulation mode (no API needed)
+    
+    # OAuth2 tokens
+    oauth_access_token = db.Column(db.String(1024))  # Access token from OAuth2 flow
+    oauth_refresh_token = db.Column(db.String(1024))  # Refresh token from OAuth2 flow
+    oauth_token_expiry = db.Column(db.DateTime)  # When the access token expires
     
     # Strategy settings
     risk_level = db.Column(db.String(20), default='moderate')  # Options: conservative, moderate, aggressive

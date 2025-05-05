@@ -27,8 +27,13 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 # Add datetime to Jinja context
 app.jinja_env.globals.update(datetime=datetime)
 
-# Configure SQLite database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///trading_bot.db")
+# Configure database
+db_url = os.environ.get("DATABASE_URL", "sqlite:///trading_bot.db")
+# Handle postgres URLs (convert postgres:// to postgresql://)
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql://', 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+print(f"Using database: {db_url.split('@')[0].split('://')[0]}://*****@{db_url.split('@')[-1] if '@' in db_url else db_url.split('://')[-1]}")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
