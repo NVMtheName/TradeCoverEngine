@@ -772,10 +772,19 @@ def oauth_initiate():
             # https://api.schwabapi.com/v1/oauth/authorize?client_id={CONSUMER_KEY}&redirect_uri={APP_CALLBACK_URL}
             # This is the format specified in the Schwab API documentation
             
-            # Define authorization parameters - simplified as per Schwab requirements
+            # Use the exact client ID and redirect URI provided
+            client_id = "kLgjtAjFRFsdGjm3ZUuGTWPEHmVtwQoX"
+            # Save the client ID in settings for future use
+            settings.api_key = client_id
+            db.session.commit()
+            
+            # Use the exact redirect URI provided
+            exact_redirect_uri = "https://7352034c-d741-4cbf-9bc5-d05d9b93e49d-00-z4porq8bem36.picard.replit.dev/oauth/callback"
+            
+            # Define authorization parameters with exact values
             auth_params = {
-                'client_id': settings.api_key,
-                'redirect_uri': redirect_uri
+                'client_id': client_id,
+                'redirect_uri': exact_redirect_uri
             }
             
             # For debugging
@@ -785,11 +794,11 @@ def oauth_initiate():
             from urllib.parse import urlencode
             auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
             
-            logger.info(f"Using Schwab API key: {settings.api_key[:4]}...{settings.api_key[-4:] if len(settings.api_key) > 8 else '****'} for OAuth flow")
-            logger.info(f"Redirect URI: {redirect_uri}")
+            logger.info(f"Using Schwab API key: {client_id[:4]}...{client_id[-4:]} for OAuth flow")
+            logger.info(f"Redirect URI: {exact_redirect_uri}")
             
-            # Show the callback URL for configuration purposes
-            flash(f"The callback URL to register in your Schwab Developer account is: {redirect_uri}", 'info')
+            # Show the OAuth authorization URL for debugging purposes
+            flash(f"Using provided credentials for Schwab OAuth authorization", 'info')
             
             # Test the authorization URL before redirecting
             try:
@@ -935,28 +944,27 @@ def oauth_callback():
                 else:
                     token_url = "https://api.schwabapi.com/v1/oauth/token"
                 
-                # Construct redirect URI for callback
-                # Must match the one used in authorization request exactly
-                app_url = request.url_root.rstrip('/')
-                
-                # Force HTTPS as required by Schwab
-                if app_url.startswith('http:'):
-                    app_url = app_url.replace('http:', 'https:', 1)
-                    
-                # Use the same redirect URI construction as in the initiation function
-                redirect_uri = f"{app_url}/oauth/callback"
+                # Use exactly the same redirect URI as in the authorization request
+                # This is critical for OAuth to work correctly
+                redirect_uri = "https://7352034c-d741-4cbf-9bc5-d05d9b93e49d-00-z4porq8bem36.picard.replit.dev/oauth/callback"
                 
                 # Now perform the token exchange
                 import requests
                 from urllib.parse import urlencode
                 
                 # Prepare the token request payload (RFC 6749 Section 4.1.3)
+                client_id = "kLgjtAjFRFsdGjm3ZUuGTWPEHmVtwQoX"
+                # For Schwab API, you should talk to your account representative to get the client secret
+                # For testing purposes, we'll use a placeholder value
+                client_secret = settings.api_secret or "YOUR_API_SECRET"
+                
+                # Prepare token payload using the exact same credentials as the authorization request
                 token_payload = {
                     'grant_type': 'authorization_code',
                     'code': code,
                     'redirect_uri': redirect_uri,
-                    'client_id': settings.api_key,
-                    'client_secret': settings.api_secret
+                    'client_id': client_id,
+                    'client_secret': client_secret
                 }
                 
                 # Log the token exchange request (excluding sensitive data)
