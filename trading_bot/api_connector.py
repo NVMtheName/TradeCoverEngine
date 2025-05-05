@@ -84,6 +84,14 @@ class APIConnector:
         self.refresh_token = None
         self.token_expiry = None
         
+        # RFC 6750 token transmission method preferences
+        # 1 = most preferred, 3 = least preferred
+        self.token_methods = {
+            'header': 1,       # Authorization Request Header Field (Section 2.1)
+            'form': 2,         # Form-Encoded Body Parameter (Section 2.2)
+            'query': 3         # URI Query Parameter (Section 2.3)
+        }
+        
         # Updated Schwab API endpoints based on the latest documentation
         if self.paper_trading:
             self.base_url = "https://api-sandbox.schwab.com/v1"
@@ -241,6 +249,121 @@ class APIConnector:
             logger.error(f"Error refreshing access token: {str(e)}")
             return False
     
+    def apply_bearer_token(self, request_kwargs, method='header'):
+        """
+        Apply Bearer Token authentication to a request according to RFC 6750.
+        
+        Args:
+            request_kwargs (dict): Request arguments to update with authentication
+            method (str): Authentication method to use ('header', 'form', or 'query')
+            
+        Returns:
+            dict: Updated request kwargs with authentication
+        """
+        if not self.access_token:
+            logger.warning("No access token available to apply")
+            return request_kwargs
+            
+        # Create a copy of the kwargs to avoid modifying the original
+        kwargs = request_kwargs.copy()
+        
+        # Default to header method if invalid method specified
+        if method not in ['header', 'form', 'query']:
+            method = 'header'
+            
+        # RFC 6750 Section 2.1: Authorization Request Header Field
+        if method == 'header':
+            # Initialize headers if not present
+            if 'headers' not in kwargs:
+                kwargs['headers'] = {}
+            
+            kwargs['headers']['Authorization'] = f'Bearer {self.access_token}'
+            
+        # RFC 6750 Section 2.2: Form-Encoded Body Parameter
+        elif method == 'form':
+            # Only applicable for certain methods like POST
+            if 'data' not in kwargs:
+                kwargs['data'] = {}
+                
+            # Convert dict to dict if it's a FormData object or similar
+            if not isinstance(kwargs['data'], dict):
+                try:
+                    # Try to convert to dict if possible
+                    kwargs['data'] = dict(kwargs['data'])
+                except (TypeError, ValueError):
+                    # If conversion fails, create a new dict
+                    kwargs['data'] = {}
+            
+            # Add the access token parameter
+            kwargs['data']['access_token'] = self.access_token
+            
+        # RFC 6750 Section 2.3: URI Query Parameter
+        elif method == 'query':
+            # Initialize params if not present
+            if 'params' not in kwargs:
+                kwargs['params'] = {}
+                
+            # Convert to dict if needed
+            if not isinstance(kwargs['params'], dict):
+                try:
+                    kwargs['params'] = dict(kwargs['params'])
+                except (TypeError, ValueError):
+                    kwargs['params'] = {}
+            
+            # Add the access token parameter
+            kwargs['params']['access_token'] = self.access_token
+        
+        return kwargs
+        
+    def make_authenticated_request(self, method, url, **kwargs):
+        """
+        Make an authenticated request to the API following RFC 6750.
+        
+        This method tries the authentication methods in order of preference
+        until one succeeds or all fail.
+        
+        Args:
+            method (str): HTTP method ('get', 'post', etc.)
+            url (str): URL to request
+            **kwargs: Additional request arguments
+            
+        Returns:
+            Response: Response object or None if all methods fail
+        """
+        # Try methods in order of preference
+        methods = sorted(self.token_methods.items(), key=lambda x: x[1])
+        response = None
+        last_error = None
+        
+        for auth_method, _ in methods:
+            try:
+                # Apply the bearer token using this method
+                auth_kwargs = self.apply_bearer_token(kwargs, method=auth_method)
+                
+                # Make the request with this authentication method
+                logger.debug(f"Trying {auth_method} authentication method")
+                fn = getattr(self.session, method.lower())
+                response = fn(url, **auth_kwargs)
+                
+                # If successful, we can stop trying methods
+                if response.status_code != 401:
+                    return response
+                    
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Error with {auth_method} authentication method: {str(e)}")
+                continue
+        
+        # If we get here, all methods failed
+        if response:
+            return response  # Return the last response we got
+        
+        # If we had an error but no response, raise the error
+        if last_error:
+            raise last_error
+            
+        return None
+    
     def is_connected(self):
         """Check if the API connector is properly connected and authenticated"""
         # If simulation mode is forced, we consider it connected
@@ -296,7 +419,8 @@ class APIConnector:
                         
                         # Try to connect to the Schwab API
                         try:
-                            # Attempt real API connection with Bearer token
+                            # Attempt real API connection with Bearer token (RFC 6750 Section 2.1)
+                            # Using Authorization Request Header Field
                             self.session.headers.update({
                                 'Authorization': f'Bearer {self.access_token}'
                             })
@@ -309,11 +433,35 @@ class APIConnector:
                                 self.api_status_details = "API connection successful"
                                 return True
                             elif response.status_code == 401 and self.refresh_token:
+                                # RFC 6750 Section 3.1 - 401 Unauthorized - handle WWW-Authenticate header
+                                auth_header = response.headers.get('WWW-Authenticate', '')
+                                error_desc = ''
+                                
+                                if 'error=' in auth_header:
+                                    # Extract error details if provided per RFC 6750 Section 3
+                                    import re
+                                    error_match = re.search(r'error="([^"]+)"', auth_header)
+                                    error_desc_match = re.search(r'error_description="([^"]+)"', auth_header)
+                                    
+                                    if error_match:
+                                        error = error_match.group(1)
+                                        error_desc = error_desc_match.group(1) if error_desc_match else ''
+                                        logger.warning(f"Bearer token error: {error} - {error_desc}")
+                                        
+                                        # Handle different error types as per RFC 6750 Section 3.1
+                                        if error == 'invalid_token':
+                                            logger.info("Invalid token - attempting refresh")
+                                        elif error == 'insufficient_scope':
+                                            logger.warning("Token has insufficient scope for this resource")
+                                            self.api_status = "Authentication Failed"
+                                            self.api_status_details = "Token has insufficient permissions"
+                                            return False
+                                
                                 # Unauthorized - try refreshing token
                                 logger.warning("Received 401 Unauthorized - attempting token refresh")
                                 refresh_success = self.refresh_access_token()
                                 if refresh_success:
-                                    # Try again with new token
+                                    # Try again with new token (RFC 6750 Section 2.1)
                                     self.session.headers.update({
                                         'Authorization': f'Bearer {self.access_token}'
                                     })
@@ -449,10 +597,10 @@ class APIConnector:
                     # Check if we have valid API credentials
                     if self.api_key and self.api_secret:
                         try:
-                            # Attempt to get account info from real Schwab API
-                            response = self.session.get(f"{self.base_url}/accounts", timeout=10)
+                            # Attempt to get account info from real Schwab API using RFC 6750
+                            response = self.make_authenticated_request('get', f"{self.base_url}/accounts", timeout=10)
                             
-                            if response.status_code == 200:
+                            if response and response.status_code == 200:
                                 # Process the actual API response
                                 data = response.json()
                                 logger.info("Successfully retrieved account info from Schwab API")
@@ -672,7 +820,10 @@ class APIConnector:
                                 'interval': 'day'
                             }
                             
-                            response = self.session.get(
+                            # Use RFC 6750 compliant request method
+                            # Try all supported bearer token authentication methods in order of preference
+                            response = self.make_authenticated_request(
+                                'get',
                                 f"{self.base_url}/market/stocks/{symbol}/history",
                                 params=params,
                                 timeout=10
