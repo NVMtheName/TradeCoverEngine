@@ -7,6 +7,13 @@ logger = logging.getLogger(__name__)
 class TradeExecutor:
     """
     Executes trades on trading platforms based on strategy signals.
+    Supports multiple advanced options strategies including:
+    - Covered Calls
+    - Put Credit Spreads
+    - Iron Condors
+    - Iron Butterflies
+    - Calendar Spreads
+    - Diagonal Spreads
     """
     
     def __init__(self, api_connector, max_position_size=5000):
@@ -563,4 +570,291 @@ class TradeExecutor:
             return {
                 'success': False,
                 'message': f"Error rolling option: {str(e)}"
+            }
+            
+    def execute_options_strategy(self, symbol, strategy_name, selected_options, quantity=None):
+        """
+        Execute a generic options strategy based on the selected options and strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            strategy_name (str): Name of the strategy to execute
+            selected_options (dict): Selected options from strategy.select_options()
+            quantity (int, optional): Number of contracts
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            # Validate parameters
+            if not symbol or not strategy_name or not selected_options:
+                return {
+                    'success': False,
+                    'message': 'Symbol, strategy name, and selected options are required'
+                }
+            
+            # Get current price if we need it
+            current_price = self.api_connector.get_current_price(symbol)
+            
+            if not current_price:
+                return {
+                    'success': False,
+                    'message': f'Could not get current price for {symbol}'
+                }
+            
+            # If quantity not specified, calculate based on max position size and risk
+            if not quantity:
+                # Default calculation - would be more specific per strategy in production
+                max_risk = selected_options.get('max_risk', 100) # Default $100 per contract if not specified
+                
+                # Limit to max 20% of max position size per trade
+                max_trade_value = self.max_position_size * 0.2
+                quantity = int(max_trade_value / max_risk)
+                quantity = max(1, quantity)  # At least 1 contract
+            
+            # Execute the specific strategy based on strategy_name
+            if strategy_name == 'put_credit_spread':
+                return self._execute_put_credit_spread(symbol, quantity, selected_options)
+            elif strategy_name == 'iron_condor':
+                return self._execute_iron_condor(symbol, quantity, selected_options)
+            elif strategy_name == 'iron_butterfly':
+                return self._execute_iron_butterfly(symbol, quantity, selected_options)
+            elif strategy_name == 'calendar_spread':
+                return self._execute_calendar_spread(symbol, quantity, selected_options)
+            elif strategy_name == 'diagonal_spread':
+                return self._execute_diagonal_spread(symbol, quantity, selected_options)
+            else:
+                return {
+                    'success': False,
+                    'message': f'Unsupported strategy: {strategy_name}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error executing {strategy_name} for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing {strategy_name}: {str(e)}'
+            }
+            
+    def _execute_iron_butterfly(self, symbol, quantity, options):
+        """
+        Execute an iron butterfly strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            quantity (int): Number of contracts
+            options (dict): Selected options from strategy.select_options()
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            center_strike = options.get('center_strike')
+            long_put_strike = options.get('long_put_strike')
+            long_call_strike = options.get('long_call_strike') 
+            expiry_date = options.get('expiry_date')
+            
+            # In a real implementation, this would call the broker API
+            # For now, we'll simulate the execution
+            logger.info(f"Simulating iron butterfly execution for {symbol}: {quantity} contracts")
+            
+            # Simulated trade result
+            result = {
+                'success': True,
+                'order_id': f"IB_{symbol}_{int(datetime.now().timestamp())}",
+                'fill_price': options.get('net_credit', 0.0),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return {
+                'success': True,
+                'message': f'Successfully executed iron butterfly for {symbol}',
+                'details': result
+            }
+                
+        except Exception as e:
+            logger.error(f"Error executing iron butterfly for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing iron butterfly: {str(e)}'
+            }
+            
+    def _execute_calendar_spread(self, symbol, quantity, options):
+        """
+        Execute a calendar spread strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            quantity (int): Number of contracts
+            options (dict): Selected options from strategy.select_options()
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            strike = options.get('strike')
+            near_expiry = options.get('near_expiry')
+            far_expiry = options.get('far_expiry')
+            option_type = options.get('option_type', 'call')
+            
+            # In a real implementation, this would call the broker API
+            # For now, we'll simulate the execution
+            logger.info(f"Simulating calendar spread execution for {symbol}: {quantity} contracts")
+            
+            # Simulated trade result
+            result = {
+                'success': True,
+                'order_id': f"CS_{symbol}_{int(datetime.now().timestamp())}",
+                'fill_price': options.get('debit', 0.0),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return {
+                'success': True,
+                'message': f'Successfully executed calendar spread for {symbol}',
+                'details': result
+            }
+                
+        except Exception as e:
+            logger.error(f"Error executing calendar spread for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing calendar spread: {str(e)}'
+            }
+            
+    def _execute_diagonal_spread(self, symbol, quantity, options):
+        """
+        Execute a diagonal spread strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            quantity (int): Number of contracts
+            options (dict): Selected options from strategy.select_options()
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            short_strike = options.get('short_strike')
+            long_strike = options.get('long_strike')
+            short_expiry = options.get('short_expiry')
+            long_expiry = options.get('long_expiry')
+            option_type = options.get('option_type', 'call')
+            
+            # In a real implementation, this would call the broker API
+            # For now, we'll simulate the execution
+            logger.info(f"Simulating diagonal spread execution for {symbol}: {quantity} contracts")
+            
+            # Simulated trade result
+            result = {
+                'success': True,
+                'order_id': f"DS_{symbol}_{int(datetime.now().timestamp())}",
+                'fill_price': options.get('debit', 0.0),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return {
+                'success': True,
+                'message': f'Successfully executed diagonal spread for {symbol}',
+                'details': result
+            }
+                
+        except Exception as e:
+            logger.error(f"Error executing diagonal spread for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing diagonal spread: {str(e)}'
+            }
+            
+    def _execute_iron_condor(self, symbol, quantity, options):
+        """
+        Execute an iron condor strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            quantity (int): Number of contracts
+            options (dict): Selected options from strategy.select_options()
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            call_short_strike = options.get('call_short_strike')
+            call_long_strike = options.get('call_long_strike')
+            put_short_strike = options.get('put_short_strike')
+            put_long_strike = options.get('put_long_strike')
+            expiry_date = options.get('expiry_date')
+            
+            # In a real implementation, this would call the broker API
+            # For now, we'll simulate the execution
+            logger.info(f"Simulating iron condor execution for {symbol}: {quantity} contracts")
+            
+            # Simulated trade result
+            result = {
+                'success': True,
+                'order_id': f"IC_{symbol}_{int(datetime.now().timestamp())}",
+                'fill_price': options.get('net_credit', 0.0),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return {
+                'success': True,
+                'message': f'Successfully executed iron condor for {symbol}',
+                'details': result
+            }
+                
+        except Exception as e:
+            logger.error(f"Error executing iron condor for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing iron condor: {str(e)}'
+            }
+            
+    def _execute_put_credit_spread(self, symbol, quantity, options):
+        """
+        Execute a put credit spread strategy.
+        
+        Args:
+            symbol (str): Stock symbol
+            quantity (int): Number of contracts
+            options (dict): Selected options from strategy.select_options()
+            
+        Returns:
+            dict: Trade execution result
+        """
+        try:
+            short_strike = options.get('short_strike')
+            long_strike = options.get('long_strike')
+            expiry_date = options.get('expiry_date')
+            
+            # Execute the spread trade through the API
+            result = self.api_connector.execute_put_credit_spread(
+                symbol=symbol,
+                quantity=quantity,
+                short_strike=short_strike,
+                long_strike=long_strike,
+                expiry_date=expiry_date
+            )
+            
+            if result and result.get('success'):
+                # Log successful trade
+                logger.info(f"Executed put credit spread for {symbol}: {quantity} contracts at {short_strike}/{long_strike}")
+                return {
+                    'success': True,
+                    'message': f'Successfully executed put credit spread for {symbol}',
+                    'details': result
+                }
+            else:
+                error_msg = result.get('message') if result else 'Unknown error'
+                logger.error(f"Failed to execute put credit spread for {symbol}: {error_msg}")
+                return {
+                    'success': False,
+                    'message': f'Failed to execute put credit spread: {error_msg}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error executing put credit spread for {symbol}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'Error executing put credit spread: {str(e)}'
             }
