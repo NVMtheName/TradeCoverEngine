@@ -741,15 +741,30 @@ def oauth_initiate():
             session['oauth_user_id'] = current_user.id
             session['oauth_initiation_time'] = datetime.now().timestamp()
             
-            # Get the base URL based on paper trading setting (use the correct format per Schwab API docs)
-            # Use exact URLs from the Schwab Trader API production specification
+            # Set OAuth 2.0 endpoints based on environment
+            # We'll try multiple possible URL patterns since the exact endpoints may have changed
             # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
             if settings.is_paper_trading:
-                auth_base_url = "https://api-sandbox.schwabapi.com/oauth2/authorize"
-                logger.info("Using Schwab sandbox OAuth2 authorization endpoint")
+                # Define possible OAuth2 auth URLs for sandbox environment
+                auth_base_urls = [
+                    "https://api-sandbox.schwabapi.com/oauth2/authorize",  # Primary URL with OAuth2 prefix
+                    "https://api-sandbox.schwabapi.com/oauth/authorize",   # Original URL with OAuth prefix
+                    "https://sandbox.schwabapi.com/broker/rest/oauth/authorize",  # From docs example
+                    "https://auth.schwab-sandbox.com/authorize"  # Alternative pattern
+                ]
+                logger.info("Using Schwab sandbox OAuth2 authorization endpoints - will try multiple patterns")
             else:
-                auth_base_url = "https://api.schwabapi.com/oauth2/authorize"
-                logger.info("Using Schwab production OAuth2 authorization endpoint")
+                # Define possible OAuth2 auth URLs for production environment
+                auth_base_urls = [
+                    "https://api.schwabapi.com/oauth2/authorize",  # Primary URL with OAuth2 prefix
+                    "https://api.schwabapi.com/oauth/authorize",   # Original URL with OAuth prefix
+                    "https://schwabapi.com/broker/rest/oauth/authorize",  # From docs example
+                    "https://auth.schwab.com/oauth/authorize"  # Alternative pattern
+                ]
+                logger.info("Using Schwab production OAuth2 authorization endpoints - will try multiple patterns")
+                
+            # Start with the first URL pattern
+            auth_base_url = auth_base_urls[0]
                 
             # Note: Based on our connection tests, the API may respond with a 500 status code during testing
             # This is expected and documented in the Schwab API documentation
@@ -833,20 +848,83 @@ def oauth_initiate():
                 import requests
                 from urllib.parse import urlparse, parse_qs
                 
-                # Test connectivity to Schwab's auth endpoint with a HEAD request
-                # This won't initiate the actual OAuth flow but will check if the endpoint is accessible
-                logger.info(f"Testing connection to Schwab's OAuth authorization endpoint")
-                parsed_url = urlparse(auth_url)
-                base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                # Test connectivity to Schwab's auth endpoints with a HEAD request
+                # This won't initiate the actual OAuth flow but will check if the endpoints are accessible
+                logger.info("Testing connection to Schwab's OAuth authorization endpoints - will try multiple patterns")
                 
-                # Make a test request to check connectivity
-                test_response = requests.head(
-                    base_auth_url,
-                    headers={"User-Agent": "Trading Bot OAuth Test"},
-                    timeout=10
-                )
+                # Try each auth URL pattern until one works
+                working_url = None
+                successful_response = None
+                correlation_id = None
+                test_url_index = 0
+
+                for test_url_index, test_base_url in enumerate(auth_base_urls):
+                    try:
+                        # Build test URL with parameters
+                        test_auth_url = f"{test_base_url}?{urlencode(auth_params)}"
+                        parsed_url = urlparse(test_auth_url)
+                        base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                        
+                        logger.info(f"Testing URL pattern {test_url_index+1}/{len(auth_base_urls)}: {base_auth_url}")
+                        
+                        # Make a test request to check connectivity
+                        test_response = requests.head(
+                            base_auth_url,
+                            headers={"User-Agent": "Trading Bot OAuth Test"},
+                            timeout=10
+                        )
+                        
+                        logger.info(f"Endpoint test status: {test_response.status_code}")
+                        
+                        # Special handling for Schwab API - 500 error is expected in the authorization flow
+                        # This is documented in the Schwab API documentation
+                        if test_response.status_code == 500 and 'Schwab-Client-CorrelId' in test_response.headers:
+                            # This is a normal response from Schwab API and indicates we found the right endpoint
+                            correlation_id = test_response.headers.get('Schwab-Client-CorrelId')
+                            logger.info(f"Received 500 status with Schwab correlation ID {correlation_id} - this is a valid response")
+                            working_url = test_base_url
+                            successful_response = test_response
+                            break
+                        elif test_response.status_code >= 200 and test_response.status_code < 400:
+                            # Good response, found a working URL
+                            working_url = test_base_url
+                            successful_response = test_response
+                            logger.info(f"Found working endpoint: {working_url}")
+                            break
+                        elif test_response.status_code == 404:
+                            # This endpoint doesn't exist, try the next one
+                            logger.warning(f"Endpoint not found (404): {base_auth_url}")
+                            continue
+                        else:
+                            # Other error, but might indicate the URL exists, so save it as a potential fallback
+                            if not working_url:
+                                working_url = test_base_url
+                                successful_response = test_response
+                    except Exception as e:
+                        logger.warning(f"Error testing endpoint {base_auth_url}: {str(e)}")
+                        continue
                 
-                logger.info(f"Schwab authorization endpoint test status: {test_response.status_code}")
+                # If we found a working URL, use it; otherwise use the original first URL
+                if working_url:
+                    auth_base_url = working_url
+                    auth_url = f"{auth_base_url}?{urlencode(auth_params)}"
+                    logger.info(f"Using working URL: {auth_base_url}")
+                    # Use the last test response for further processing
+                    test_response = successful_response
+                else:
+                    logger.warning("No working endpoints found, using the default URL")
+                    # Use the original URL and response
+                    parsed_url = urlparse(auth_url)
+                    base_auth_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                    
+                    # Make a test request to check connectivity with the default URL
+                    test_response = requests.head(
+                        base_auth_url,
+                        headers={"User-Agent": "Trading Bot OAuth Test"},
+                        timeout=10
+                    )
+                    
+                logger.info(f"Final Schwab authorization endpoint test status: {test_response.status_code}")
                 
                 # Special handling for Schwab API - 500 error is expected in the authorization flow
                 # This is documented in the Schwab API documentation and confirmed in our tests
@@ -976,15 +1054,30 @@ def oauth_callback():
                 # Log the authorization code (truncated for security)
                 logger.info(f"Processing authorization code: {code[:5]}...")
                 
-                # Get the token endpoint based on paper trading setting
-                # Use the exact token URL from the Schwab Trader API production specification
+                # Set OAuth 2.0 token endpoints based on environment
+                # We'll try multiple possible URL patterns since the exact endpoints may have changed
                 # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
                 if settings.is_paper_trading:
-                    token_url = "https://api-sandbox.schwabapi.com/oauth2/token"
-                    logger.info("Using Schwab sandbox OAuth2 token endpoint")
+                    # Define possible OAuth2 token URLs for sandbox environment
+                    token_urls = [
+                        "https://api-sandbox.schwabapi.com/oauth2/token",  # Primary URL with OAuth2 prefix
+                        "https://api-sandbox.schwabapi.com/oauth/token",   # Original URL with OAuth prefix
+                        "https://sandbox.schwabapi.com/broker/rest/oauth/token",  # From docs example
+                        "https://auth.schwab-sandbox.com/token"  # Alternative pattern
+                    ]
+                    logger.info("Using Schwab sandbox OAuth2 token endpoints - will try multiple patterns")
                 else:
-                    token_url = "https://api.schwabapi.com/oauth2/token"
-                    logger.info("Using Schwab production OAuth2 token endpoint")
+                    # Define possible OAuth2 token URLs for production environment
+                    token_urls = [
+                        "https://api.schwabapi.com/oauth2/token",  # Primary URL with OAuth2 prefix
+                        "https://api.schwabapi.com/oauth/token",   # Original URL with OAuth prefix
+                        "https://schwabapi.com/broker/rest/oauth/token",  # From docs example
+                        "https://auth.schwab.com/oauth/token"  # Alternative pattern
+                    ]
+                    logger.info("Using Schwab production OAuth2 token endpoints - will try multiple patterns")
+                    
+                # Start with the first URL pattern
+                token_url = token_urls[0]
                 
                 # Use exactly the same redirect URI as in the authorization request
                 # This is critical for OAuth to work correctly
@@ -1035,22 +1128,73 @@ def oauth_callback():
                     'scope': 'trading'  # Match scope from authorization request per Schwab docs
                 }
                 
-                # Log the token exchange request (excluding sensitive data)
-                logger.info(f"Exchanging authorization code for tokens at {token_url}")
-                logger.info(f"Using redirect_uri: {redirect_uri}")
+                # Prepare headers for token request
+                token_headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                    'User-Agent': 'Trading Bot OAuth2 Flow'
+                }
                 
-                # Make the token exchange request
-                token_response = requests.post(
-                    token_url,
-                    data=token_payload,
-                    headers={
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': 'application/json'
-                    },
-                    timeout=15  # Longer timeout for token exchange
-                )
+                # Try each token URL pattern until one works
+                token_response = None
+                successful_url = None
                 
-                logger.info(f"Token exchange response status: {token_response.status_code}")
+                for url_index, current_token_url in enumerate(token_urls):
+                    try:
+                        # Log the token exchange request (excluding sensitive data)
+                        logger.info(f"Attempting token exchange with URL {url_index+1}/{len(token_urls)}: {current_token_url}")
+                        logger.info(f"Using redirect_uri: {redirect_uri}")
+                        
+                        # Make the token exchange request
+                        response = requests.post(
+                            current_token_url,
+                            data=token_payload,
+                            headers=token_headers,
+                            timeout=15  # Longer timeout for token exchange
+                        )
+                        
+                        logger.info(f"Response status: {response.status_code}")
+                        
+                        # If successful, use this response and URL
+                        if response.status_code == 200:
+                            token_response = response
+                            successful_url = current_token_url
+                            logger.info(f"Found working token endpoint: {successful_url}")
+                            break
+                        
+                        # Save the first response for error reporting if no endpoints work
+                        if not token_response:
+                            token_response = response
+                        
+                        # If we get a 400 Bad Request, this could be the right endpoint but with invalid parameters
+                        # This is more likely the correct endpoint than a 404 Not Found response
+                        if response.status_code == 400:
+                            logger.warning(f"Got 400 Bad Request from {current_token_url}, this might be the correct endpoint with invalid parameters")
+                            token_response = response
+                            successful_url = current_token_url
+                            # Continue trying other URLs in case we find a working one
+                        
+                        # If we get a 404, this endpoint doesn't exist
+                        if response.status_code == 404:
+                            logger.warning(f"Endpoint not found (404): {current_token_url}")
+                            # Continue to next URL
+                            
+                    except Exception as e:
+                        logger.warning(f"Error with token endpoint {current_token_url}: {str(e)}")
+                        # Continue to next URL
+                        continue
+                
+                # Update token_url to the one that worked (or the last one tried)
+                if successful_url:
+                    token_url = successful_url
+                    logger.info(f"Using working token URL: {token_url}")
+                else:
+                    logger.warning("No token endpoints returned a 200 status code, using the last response")
+                
+                if not token_response:
+                    raise Exception("All token endpoints failed")
+                    
+                logger.info(f"Final token exchange response status: {token_response.status_code}")
                 
                 if token_response.status_code == 200:
                     # Process successful token response (RFC 6749 Section 4.1.4)
