@@ -280,8 +280,8 @@ def dashboard():
     
     try:
         if api_connector:
-            # Get recent trades from database
-            recent_trades = Trade.query.order_by(Trade.timestamp.desc()).limit(10).all()
+            # Get recent trades from database for current user
+            recent_trades = Trade.query.filter_by(user_id=current_user.id).order_by(Trade.timestamp.desc()).limit(10).all()
             
             # Check if API is connected
             if api_connector.is_connected():
@@ -315,7 +315,7 @@ def dashboard():
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    settings = Settings.query.first()
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
     
     if request.method == 'POST':
         try:
@@ -358,7 +358,7 @@ def settings():
 @app.route('/trades')
 @login_required
 def trades():
-    all_trades = Trade.query.order_by(Trade.timestamp.desc()).all()
+    all_trades = Trade.query.filter_by(user_id=current_user.id).order_by(Trade.timestamp.desc()).all()
     return render_template('trades.html', trades=all_trades)
 
 @app.route('/analysis')
@@ -370,7 +370,7 @@ def analysis():
     
     try:
         if stock_analyzer:
-            watchlist = WatchlistItem.query.all()
+            watchlist = WatchlistItem.query.filter_by(user_id=current_user.id).all()
             symbol_list = [item.symbol for item in watchlist]
             
             if symbol_list:
@@ -413,7 +413,7 @@ def add_to_watchlist():
 @login_required
 def remove_from_watchlist(symbol):
     try:
-        watchlist_item = WatchlistItem.query.filter_by(symbol=symbol).first()
+        watchlist_item = WatchlistItem.query.filter_by(user_id=current_user.id, symbol=symbol).first()
         if watchlist_item:
             db.session.delete(watchlist_item)
             db.session.commit()
@@ -445,6 +445,7 @@ def execute_covered_call():
             if result['success']:
                 # Record the trade
                 trade = Trade(
+                    user_id=current_user.id,
                     symbol=symbol,
                     trade_type='COVERED_CALL',
                     quantity=quantity,
@@ -642,7 +643,7 @@ def auto_trading():
     
     try:
         # Get watchlist items
-        watchlist = WatchlistItem.query.all()
+        watchlist = WatchlistItem.query.filter_by(user_id=current_user.id).all()
         
         # Check if auto trader is available
         if auto_trader:
