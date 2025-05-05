@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
+import math
+import numpy as np
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -411,7 +413,7 @@ class PutCreditSpreadStrategy(OptionsStrategy):
                     'spread_width': spread_width,
                     'max_risk': spread_width - net_credit,
                     'max_reward': net_credit,
-                    'risk_reward_ratio': (spread_width - net_credit) / net_credit,
+                    'risk_reward_ratio': (spread_width - net_credit) / net_credit if net_credit > 0 else float('inf'),
                     'days_to_expiry': days_to_expiry,
                     'expiry_date': short_put.get('expiry', ''),
                     'score': score
@@ -549,6 +551,376 @@ class PutCreditSpreadStrategy(OptionsStrategy):
         
         return None
 
+class IronButterflyStrategy(OptionsStrategy):
+    """
+    Implements an Iron Butterfly options strategy.
+    This is a market-neutral strategy combining a put spread and a call spread
+    with the short options at the same strike price (typically near the current stock price).
+    """
+    
+    def __init__(self, risk_level='moderate', profit_target_percentage=5.0, 
+                 stop_loss_percentage=3.0, options_expiry_days=30):
+        """
+        Initialize the iron butterfly strategy.
+        """
+        super().__init__(risk_level, profit_target_percentage, stop_loss_percentage, options_expiry_days)
+        logger.info(f"Initialized iron butterfly strategy with risk level: {risk_level}")
+    
+    def _configure_risk_parameters(self):
+        """Configure strategy parameters based on the selected risk level"""
+        if self.risk_level == 'conservative':
+            # Conservative: Wider iron butterfly with lower premium but higher probability
+            self.center_strike_buffer = 2.0  # Target % distance from current price for center strike
+            self.wings_width_percentage = 6.0  # Width of each wing as % of stock price
+            self.premium_min_percentage = 1.0  # Minimum credit as % of max risk
+            self.delta_tolerance = 0.05  # How close to 0.50 delta the center strike should be
+        
+        elif self.risk_level == 'aggressive':
+            # Aggressive: Narrower iron butterfly with higher premium but lower probability
+            self.center_strike_buffer = 0.5  # Target % distance from current price for center strike
+            self.wings_width_percentage = 4.0  # Width of each wing as % of stock price
+            self.premium_min_percentage = 2.0  # Minimum credit as % of max risk
+            self.delta_tolerance = 0.1  # How close to 0.50 delta the center strike should be
+        
+        else:  # moderate (default)
+            # Moderate: Balanced approach
+            self.center_strike_buffer = 1.0  # Target % distance from current price for center strike
+            self.wings_width_percentage = 5.0  # Width of each wing as % of stock price
+            self.premium_min_percentage = 1.5  # Minimum credit as % of max risk
+            self.delta_tolerance = 0.08  # How close to 0.50 delta the center strike should be
+    
+    def select_options(self, stock_price, options_data):
+        """Select the best options for an iron butterfly"""
+        if not options_data or 'puts' not in options_data or 'calls' not in options_data:
+            logger.warning("Incomplete options data for iron butterfly selection")
+            return None
+        
+        puts = options_data['puts']
+        calls = options_data['calls']
+        
+        if not puts or not calls:
+            logger.warning("Empty puts or calls list for iron butterfly selection")
+            return None
+            
+        # Sort puts and calls by strike price (ascending)
+        sorted_puts = sorted(puts, key=lambda x: x.get('strike', 0))
+        sorted_calls = sorted(calls, key=lambda x: x.get('strike', 0))
+        
+        suitable_butterflies = []
+        
+        # For iron butterfly, first find a suitable center strike near current price
+        # This will be used for both short put and short call
+        for option in puts + calls:  # Check all options to find center strike
+            strike = option.get('strike', 0)
+            delta = abs(option.get('delta', 0.5))
+            days_to_expiry = option.get('days_to_expiry', 30)
+            
+            # Skip if not close to ATM (near 0.50 delta, within tolerance)
+            if abs(delta - 0.5) > self.delta_tolerance:
+                continue
+            
+            # Skip if not within required distance from current price
+            price_diff_pct = abs((strike - stock_price) / stock_price) * 100
+            if price_diff_pct > self.center_strike_buffer:
+                continue
+                
+            # Skip if expiry doesn't match our target
+            if not self.is_within_expiry_range(days_to_expiry):
+                continue
+            
+            # Now we have a potential center strike, look for wings
+            center_strike = strike
+            
+            # Find appropriate puts for butterfly
+            suitable_short_put = None
+            suitable_long_put = None
+            
+            for put in sorted_puts:
+                # For short put, need same strike as center and same expiry
+                if (put.get('strike') == center_strike and 
+                    put.get('days_to_expiry') == days_to_expiry):
+                    suitable_short_put = put
+                    break
+            
+            if not suitable_short_put:
+                continue  # Skip this center strike if no short put found
+            
+            # Calculate wing width
+            wing_width = stock_price * self.wings_width_percentage / 100
+            target_long_put_strike = center_strike - wing_width
+            
+            # Find closest long put strike
+            best_long_put = None
+            best_strike_diff = float('inf')
+            
+            for put in sorted_puts:
+                if put.get('days_to_expiry') != days_to_expiry:
+                    continue
+                    
+                put_strike = put.get('strike', 0)
+                if put_strike >= center_strike:  # Long put must be lower than center
+                    continue
+                    
+                strike_diff = abs(put_strike - target_long_put_strike)
+                if strike_diff < best_strike_diff:
+                    best_strike_diff = strike_diff
+                    best_long_put = put
+            
+            if not best_long_put:
+                continue  # Skip if no long put found
+                
+            suitable_long_put = best_long_put
+            
+            # Find appropriate calls for butterfly
+            suitable_short_call = None
+            suitable_long_call = None
+            
+            for call in sorted_calls:
+                # For short call, need same strike as center and same expiry
+                if (call.get('strike') == center_strike and 
+                    call.get('days_to_expiry') == days_to_expiry):
+                    suitable_short_call = call
+                    break
+            
+            if not suitable_short_call:
+                continue  # Skip this center strike if no short call found
+            
+            # Calculate target long call strike
+            target_long_call_strike = center_strike + wing_width
+            
+            # Find closest long call strike
+            best_long_call = None
+            best_strike_diff = float('inf')
+            
+            for call in sorted_calls:
+                if call.get('days_to_expiry') != days_to_expiry:
+                    continue
+                    
+                call_strike = call.get('strike', 0)
+                if call_strike <= center_strike:  # Long call must be higher than center
+                    continue
+                    
+                strike_diff = abs(call_strike - target_long_call_strike)
+                if strike_diff < best_strike_diff:
+                    best_strike_diff = strike_diff
+                    best_long_call = call
+            
+            if not best_long_call:
+                continue  # Skip if no long call found
+                
+            suitable_long_call = best_long_call
+            
+            # If we get here, we have all four legs of the iron butterfly
+            # Calculate key metrics
+            short_put_premium = suitable_short_put.get('premium', 0)
+            long_put_premium = suitable_long_put.get('premium', 0)
+            short_call_premium = suitable_short_call.get('premium', 0)
+            long_call_premium = suitable_long_call.get('premium', 0)
+            
+            long_put_strike = suitable_long_put.get('strike', 0)
+            long_call_strike = suitable_long_call.get('strike', 0)
+            
+            net_credit = (short_put_premium + short_call_premium) - (long_put_premium + long_call_premium)
+            put_wing_width = center_strike - long_put_strike
+            call_wing_width = long_call_strike - center_strike
+            max_risk = min(put_wing_width, call_wing_width) - net_credit
+            max_profit = net_credit
+            
+            # Skip if net credit is too small
+            credit_to_risk_ratio = (net_credit / max_risk) * 100
+            if credit_to_risk_ratio < self.premium_min_percentage:
+                continue
+            
+            # Calculate score for this butterfly
+            center_score = 1 - (price_diff_pct / self.center_strike_buffer)
+            width_balance_score = 1 - abs(put_wing_width - call_wing_width) / max(put_wing_width, call_wing_width)
+            credit_score = credit_to_risk_ratio / self.premium_min_percentage
+            expiry_score = 1 - abs(days_to_expiry - self.options_expiry_days) / 30
+            
+            # Weight scores differently based on risk level
+            if self.risk_level == 'conservative':
+                final_score = center_score * 0.4 + width_balance_score * 0.3 + credit_score * 0.1 + expiry_score * 0.2
+            elif self.risk_level == 'aggressive':
+                final_score = center_score * 0.2 + width_balance_score * 0.2 + credit_score * 0.5 + expiry_score * 0.1
+            else:  # moderate
+                final_score = center_score * 0.3 + width_balance_score * 0.25 + credit_score * 0.3 + expiry_score * 0.15
+            
+            # Create butterfly object
+            butterfly = {
+                'strategy': 'IRON_BUTTERFLY',
+                'center_strike': center_strike,
+                'short_put': suitable_short_put,
+                'long_put': suitable_long_put,
+                'short_call': suitable_short_call,
+                'long_call': suitable_long_call,
+                'short_put_strike': center_strike,
+                'long_put_strike': long_put_strike,
+                'short_call_strike': center_strike,
+                'long_call_strike': long_call_strike,
+                'short_put_premium': short_put_premium,
+                'long_put_premium': long_put_premium,
+                'short_call_premium': short_call_premium,
+                'long_call_premium': long_call_premium,
+                'net_credit': net_credit,
+                'put_wing_width': put_wing_width,
+                'call_wing_width': call_wing_width,
+                'max_risk': max_risk,
+                'max_profit': max_profit,
+                'breakeven_lower': center_strike - net_credit,
+                'breakeven_upper': center_strike + net_credit,
+                'days_to_expiry': days_to_expiry,
+                'expiry_date': suitable_short_put.get('expiry', ''),
+                'score': final_score
+            }
+            
+            suitable_butterflies.append(butterfly)
+        
+        # Sort by score (highest first)
+        suitable_butterflies.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Return the highest-scoring butterfly or None if no suitable butterflies
+        return suitable_butterflies[0] if suitable_butterflies else None
+    
+    def adjust_position(self, position, current_price):
+        """Determine if a position needs adjustment based on price movement"""
+        # Extract relevant position details
+        center_strike = position.get('center_strike', 0)
+        net_credit = position.get('net_credit', 0)
+        max_risk = position.get('max_risk', 0)
+        expiry_date = position.get('expiry_date')
+        breakeven_lower = position.get('breakeven_lower', 0)
+        breakeven_upper = position.get('breakeven_upper', 0)
+        
+        # If missing essential details, take no action
+        if not center_strike or not expiry_date:
+            return {
+                'action': 'NO_ACTION',
+                'reason': 'Incomplete position details for iron butterfly'
+            }
+        
+        # Calculate days to expiry
+        days_to_expiry = self.calculate_days_to_expiry(expiry_date)
+        
+        # Calculate estimated current value and profit
+        # For iron butterfly, maximum profit occurs when price equals center strike at expiration
+        if days_to_expiry <= 0:
+            # At expiration
+            if abs(current_price - center_strike) < 0.01:  # At or very near center strike
+                current_value = 0
+            else:
+                # Calculate intrinsic value at expiration
+                current_value = min(abs(current_price - center_strike), max(position.get('put_wing_width', 0), position.get('call_wing_width', 0)))
+        else:
+            # Before expiration - simplified model
+            # Distance from center as percentage of wing width
+            distance_pct = abs(current_price - center_strike) / center_strike
+            time_factor = min(1.0, days_to_expiry / 30)
+            
+            if distance_pct < 0.01:  # Very close to center strike
+                # Mostly time value remains
+                current_value = net_credit * time_factor
+            else:
+                # More complex estimate based on distance from center and time remaining
+                intrinsic_component = min(distance_pct * center_strike, max(position.get('put_wing_width', 0), position.get('call_wing_width', 0)))
+                time_component = net_credit * time_factor * (1 - distance_pct)
+                current_value = intrinsic_component - time_component
+        
+        # Profit is net credit minus current value
+        current_profit = net_credit - current_value
+        profit_percentage = (current_profit / max_risk) * 100 if max_risk > 0 else 0
+        
+        # Adjustment logic
+        if profit_percentage >= self.profit_target_percentage:
+            return {
+                'action': 'CLOSE_BUTTERFLY',
+                'reason': f'Profit target reached: {profit_percentage:.2f}% profit'
+            }
+        
+        if profit_percentage <= -self.stop_loss_percentage:
+            return {
+                'action': 'CLOSE_BUTTERFLY',
+                'reason': f'Stop loss triggered: {profit_percentage:.2f}% loss'
+            }
+        
+        # Time-based management
+        if days_to_expiry <= 5 and current_price > breakeven_lower and current_price < breakeven_upper:
+            # Close to expiration and price within profit zone
+            return {
+                'action': 'CLOSE_BUTTERFLY',
+                'reason': f'Near expiration ({days_to_expiry} days) with price in profit zone'
+            }
+        
+        if days_to_expiry <= 7 and (current_price < breakeven_lower * 0.98 or current_price > breakeven_upper * 1.02):
+            # Close to expiration and price outside breakeven points with buffer
+            return {
+                'action': 'CLOSE_BUTTERFLY',
+                'reason': f'Near expiration ({days_to_expiry} days) with price outside profit zone'
+            }
+        
+        # Price movement adjustment
+        if days_to_expiry > 15 and distance_pct > 0.05:
+            # Consider rolling to a new butterfly centered closer to current price
+            return {
+                'action': 'ROLL_BUTTERFLY',
+                'reason': f'Price moved away from center strike by {distance_pct:.2f}%, consider recenter'
+            }
+        
+        # Default: no action needed
+        return {
+            'action': 'NO_ACTION',
+            'reason': 'Position within parameters'
+        }
+    
+    def generate_order_parameters(self, action, position, available_options=None):
+        """Generate order parameters for trade execution"""
+        symbol = position.get('symbol')
+        quantity = position.get('quantity', 0)
+        center_strike = position.get('center_strike', 0)
+        long_put_strike = position.get('long_put_strike', 0)
+        long_call_strike = position.get('long_call_strike', 0)
+        expiry_date = position.get('expiry_date')
+        
+        if action == 'CLOSE_BUTTERFLY':
+            return {
+                'action': 'CLOSE_BUTTERFLY',
+                'symbol': symbol,
+                'quantity': quantity,
+                'short_put': f"{symbol}_P_{center_strike}_{expiry_date}",
+                'long_put': f"{symbol}_P_{long_put_strike}_{expiry_date}",
+                'short_call': f"{symbol}_C_{center_strike}_{expiry_date}",
+                'long_call': f"{symbol}_C_{long_call_strike}_{expiry_date}",
+                'order_type': 'MARKET'
+            }
+        
+        elif action == 'ROLL_BUTTERFLY':
+            if not available_options or 'puts' not in available_options or 'calls' not in available_options:
+                return None
+            
+            # Find new iron butterfly
+            new_butterfly = self.select_options(position.get('current_price', 0), available_options)
+            
+            if not new_butterfly:
+                return None
+            
+            # Generate order for rolling to new butterfly
+            return {
+                'action': 'ROLL_BUTTERFLY',
+                'symbol': symbol,
+                'quantity': quantity,
+                'close_short_put': f"{symbol}_P_{center_strike}_{expiry_date}",
+                'close_long_put': f"{symbol}_P_{long_put_strike}_{expiry_date}",
+                'close_short_call': f"{symbol}_C_{center_strike}_{expiry_date}",
+                'close_long_call': f"{symbol}_C_{long_call_strike}_{expiry_date}",
+                'new_short_put': f"{symbol}_P_{new_butterfly['center_strike']}_{new_butterfly['expiry_date']}",
+                'new_long_put': f"{symbol}_P_{new_butterfly['long_put_strike']}_{new_butterfly['expiry_date']}",
+                'new_short_call': f"{symbol}_C_{new_butterfly['center_strike']}_{new_butterfly['expiry_date']}",
+                'new_long_call': f"{symbol}_C_{new_butterfly['long_call_strike']}_{new_butterfly['expiry_date']}",
+                'order_type': 'NET_DEBIT',
+                'max_debit': new_butterfly['net_credit'] * 0.5  # Allow paying up to 50% of new credit
+            }
+        
+        return None
+        
 class IronCondorStrategy(OptionsStrategy):
     """
     Implements an Iron Condor options strategy.
