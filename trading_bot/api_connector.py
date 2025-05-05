@@ -109,6 +109,19 @@ class APIConnector:
         logger.info(f"Initialized Charles Schwab API connector with client ID: {display_client_id}")
         logger.info(f"Paper trading mode: {self.paper_trading}")
         
+    def is_connected(self):
+        """Check if the API connection is working and return connection status.
+        
+        Returns:
+            bool: True if connected, False otherwise
+        """
+        # If in force simulation mode, we don't need a real connection
+        if self.force_simulation:
+            return True
+            
+        # Perform real connection check
+        return self._check_connection()
+    
     def _check_connection(self):
         """Check if the API connection is working."""
         try:
