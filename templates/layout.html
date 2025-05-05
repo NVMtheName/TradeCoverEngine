@@ -67,6 +67,21 @@
                         <i class="fas fa-shield-alt me-1"></i>
                         <span id="connectionStatus">Connected</span>
                     </span>
+                    {% if current_user.is_authenticated %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user me-1"></i> {{ current_user.username }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('settings') }}"><i class="fas fa-cog me-1"></i> Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-1"></i> Logout</a></li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary btn-sm me-2">Log In</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-outline-light btn-sm">Register</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -207,7 +222,8 @@
                     // Mark the current time as the last time we visited the current page
                     pageVisitCache[window.location.pathname] = new Date().getTime();
                 });
-            });}
+            });
+        });
     </script>
 </body>
 </html>

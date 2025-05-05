@@ -392,14 +392,14 @@ def add_to_watchlist():
         return redirect(url_for('analysis'))
     
     # Check if already in watchlist
-    existing = WatchlistItem.query.filter_by(symbol=symbol).first()
+    existing = WatchlistItem.query.filter_by(user_id=current_user.id, symbol=symbol).first()
     if existing:
         flash(f'{symbol} is already in your watchlist', 'warning')
         return redirect(url_for('analysis'))
     
     # Add to watchlist
     try:
-        watchlist_item = WatchlistItem(symbol=symbol)
+        watchlist_item = WatchlistItem(symbol=symbol, user_id=current_user.id)
         db.session.add(watchlist_item)
         db.session.commit()
         flash(f'{symbol} added to watchlist', 'success')

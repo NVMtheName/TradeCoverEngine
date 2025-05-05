@@ -8,12 +8,21 @@
         <h1 class="hero-title">Automated Covered Call Trading</h1>
         <p class="hero-subtitle">Analyze stocks and execute covered call strategies with confidence</p>
         <div class="mt-4">
+            {% if current_user.is_authenticated %}
             <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-lg me-2">
                 <i class="fas fa-tachometer-alt me-2"></i> Go to Dashboard
             </a>
             <a href="{{ url_for('analysis') }}" class="btn btn-outline-light btn-lg">
                 <i class="fas fa-search-dollar me-2"></i> Analyze Stocks
             </a>
+            {% else %}
+            <a href="{{ url_for('login') }}" class="btn btn-light btn-lg me-2">
+                <i class="fas fa-sign-in-alt me-2"></i> Login
+            </a>
+            <a href="{{ url_for('register') }}" class="btn btn-outline-light btn-lg">
+                <i class="fas fa-user-plus me-2"></i> Register
+            </a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -134,9 +143,18 @@
         <h2>Ready to get started?</h2>
         <p class="lead">Set up your trading bot in minutes and start generating income with covered calls</p>
         <div class="mt-4">
+            {% if current_user.is_authenticated %}
             <a href="{{ url_for('settings') }}" class="btn btn-primary btn-lg">
                 <i class="fas fa-rocket me-2"></i> Set Up Your Bot
             </a>
+            {% else %}
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-2">
+                <i class="fas fa-user-plus me-2"></i> Create an Account
+            </a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg">
+                <i class="fas fa-sign-in-alt me-2"></i> Login
+            </a>
+            {% endif %}
         </div>
     </section>
 </div>
