@@ -6,7 +6,8 @@ from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timedelta
+import os.path
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 
 # Configure logging
@@ -21,7 +22,10 @@ db = SQLAlchemy(model_class=Base)
 
 # Create the Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "dev_secret_key")
+app.secret_key = os.environ.get("SESSION_SECRET", os.environ.get("FLASK_SECRET_KEY", "dev_secret_key"))
+# Set session permanency and lifetime
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)  # Sessions last 31 days
+app.config['SESSION_TYPE'] = 'filesystem'
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Add datetime to Jinja context
