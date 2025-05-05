@@ -8,7 +8,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
 import os.path
+import requests
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+
+# Import our Schwab proxy module - will be imported after app initialization to avoid circular imports
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -63,6 +66,13 @@ db.init_app(app)
 
 # Import models after initializing db
 from models import User, Settings, Trade, WatchlistItem
+
+# Import and register the Schwab proxy blueprint after app initialization
+from schwab_proxy import schwab_proxy
+app.register_blueprint(schwab_proxy)
+
+# Configure sandbox status
+app.config['USE_SANDBOX'] = os.environ.get('USE_SANDBOX', 'true').lower() == 'true'  # Default to sandbox
 
 # Import forms
 from forms import LoginForm, RegistrationForm
