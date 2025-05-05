@@ -90,21 +90,59 @@ class APIConnector:
         
     def _init_schwab(self):
         """Initialize Charles Schwab API settings."""
-        # Set base URLs exactly as specified in the Schwab Trader API documentation
+        # Set base URLs according to Schwab Trader API documentation
         # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
+        # However, Schwab may have updated their API endpoints since documentation was published
+        # We'll try multiple potential OAuth endpoint URLs during the authentication flow
+        
+        # Set base API URL - this is likely still correct
         if self.paper_trading:
-            # Sandbox environment - using explicit endpoints from documentation
+            # Sandbox environment
             self.base_url = "https://api-sandbox.schwabapi.com/broker/rest/v1"
-            self.oauth_auth_url = "https://api-sandbox.schwabapi.com/oauth2/authorize"
-            self.oauth_token_url = "https://api-sandbox.schwabapi.com/oauth2/token"
             logger.info("Using Schwab sandbox API endpoints (v1)")
+            
+            # Define possible OAuth2 auth URLs (primary first, then fallbacks)
+            self.oauth_auth_urls = [
+                "https://api-sandbox.schwabapi.com/oauth2/authorize",
+                "https://api-sandbox.schwabapi.com/oauth/authorize",
+                "https://sandbox.schwabapi.com/broker/rest/oauth/authorize"
+            ]
+            
+            # Define possible OAuth2 token URLs (primary first, then fallbacks)
+            self.oauth_token_urls = [
+                "https://api-sandbox.schwabapi.com/oauth2/token",
+                "https://api-sandbox.schwabapi.com/oauth/token",
+                "https://sandbox.schwabapi.com/broker/rest/oauth/token"
+            ]
+            
+            # Set the primary URLs for initial access
+            self.oauth_auth_url = self.oauth_auth_urls[0]
+            self.oauth_token_url = self.oauth_token_urls[0]
+            
         else:
-            # Production environment - using explicit endpoints from documentation
-            # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
+            # Production environment
             self.base_url = "https://api.schwabapi.com/broker/rest/v1"
-            self.oauth_auth_url = "https://api.schwabapi.com/oauth2/authorize"
-            self.oauth_token_url = "https://api.schwabapi.com/oauth2/token"
             logger.info("Using Schwab production API endpoints (v1)")
+            
+            # Define possible OAuth2 auth URLs (primary first, then fallbacks)
+            self.oauth_auth_urls = [
+                "https://api.schwabapi.com/oauth2/authorize",
+                "https://api.schwabapi.com/oauth/authorize",
+                "https://schwabapi.com/broker/rest/oauth/authorize",
+                "https://auth.schwab.com/oauth/authorize"
+            ]
+            
+            # Define possible OAuth2 token URLs (primary first, then fallbacks)
+            self.oauth_token_urls = [
+                "https://api.schwabapi.com/oauth2/token",
+                "https://api.schwabapi.com/oauth/token",
+                "https://schwabapi.com/broker/rest/oauth/token",
+                "https://auth.schwab.com/oauth/token"
+            ]
+            
+            # Set the primary URLs for initial access
+            self.oauth_auth_url = self.oauth_auth_urls[0]
+            self.oauth_token_url = self.oauth_token_urls[0]
             
         # Set API headers (no authorization yet - will be added after OAuth flow)
         self.headers = {
@@ -126,6 +164,18 @@ class APIConnector:
         logger.info(f"Initialized Charles Schwab API connector with client ID: {display_client_id}")
         logger.info(f"Paper trading mode: {self.paper_trading}")
         
+        # Check if we need to authenticate
+        if not self.client_id or not self.client_secret:
+            logger.warning("No API key or secret provided for Schwab API - OAuth2 authentication not possible")
+            logger.warning("Falling back to simulation mode")
+            self.force_simulation = True
+        elif not self.access_token:
+            logger.warning("No access token available for Schwab API - OAuth2 authentication required")
+            logger.warning("To use the Schwab API, you need to register your application for OAuth2 access.")
+            logger.warning("Your API key is your OAuth2 client_id and your API secret is your client_secret.")
+            logger.warning("Falling back to simulation mode")
+            self.force_simulation = True
+        
     def is_token_expired(self):
         """Check if the access token has expired.
         
@@ -143,6 +193,7 @@ class APIConnector:
     def refresh_access_token(self):
         """Refresh the access token using the refresh token.
         Follows the OAuth 2.0 refresh token flow as specified by Schwab API.
+        If the primary token URL fails, it will try fallback URLs.
         
         Returns:
             bool: True if token was successfully refreshed, False otherwise
@@ -155,77 +206,103 @@ class APIConnector:
             logger.warning("Missing client credentials for token refresh")
             return False
             
-        try:
-            from datetime import datetime, timedelta
-            
-            # Get the token endpoint URL based on environment
-            # For Schwab API, the token URL is /oauth2/token
-            token_url = self.oauth_token_url  # Use the proper OAuth2 token URL
+        # Prepare token refresh request based on Schwab API docs
+        token_payload = {
+            'grant_type': 'refresh_token',
+            'refresh_token': self.refresh_token,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'scope': 'trading'  # Using trading scope for full API access per Schwab documentation
+        }
+        
+        # Common headers for token requests
+        token_headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        }
+        
+        # Try each token URL in the list until one works
+        for token_url in self.oauth_token_urls:
+            try:
+                from datetime import datetime, timedelta
                 
-            # Prepare token refresh request based on Schwab API docs
-            token_payload = {
-                'grant_type': 'refresh_token',
-                'refresh_token': self.refresh_token,
-                'client_id': self.client_id,
-                'client_secret': self.client_secret,
-                'scope': 'trading'  # Using trading scope for full API access per Schwab documentation
-            }
-            
-            # Execute the token refresh request
-            logger.info(f"Refreshing access token at {token_url}")
-            
-            token_response = self.session.post(
-                token_url,
-                data=token_payload,
-                headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                timeout=15  # Longer timeout for token operations
-            )
-            
-            logger.info(f"Token refresh response status: {token_response.status_code}")
-            
-            if token_response.status_code == 200:
-                # Process successful token response
-                token_data = token_response.json()
+                # Execute the token refresh request
+                logger.info(f"Attempting to refresh access token at {token_url}")
                 
-                # Extract and save token data
-                self.access_token = token_data.get('access_token')
-                new_refresh_token = token_data.get('refresh_token')  # May or may not be provided
-                expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                token_response = self.session.post(
+                    token_url,
+                    data=token_payload,
+                    headers=token_headers,
+                    timeout=15  # Longer timeout for token operations
+                )
                 
-                # Update refresh token if a new one was provided
-                if new_refresh_token:
-                    self.refresh_token = new_refresh_token
+                logger.info(f"Token refresh response status: {token_response.status_code}")
+                
+                if token_response.status_code == 200:
+                    # Process successful token response
+                    token_data = token_response.json()
                     
-                # Update token expiry
-                self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
-                
-                # Update authorization header
-                token_type = token_data.get('token_type', 'Bearer')
-                self.session.headers.update({
-                    'Authorization': f'{token_type} {self.access_token}'
-                })
-                
-                logger.info(f"Successfully refreshed access token, expires in {expires_in} seconds")
-                return True
-            else:
-                # Handle error response
-                try:
-                    error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
-                except ValueError:
-                    error_content = {}
+                    # Extract and save token data
+                    self.access_token = token_data.get('access_token')
+                    new_refresh_token = token_data.get('refresh_token')  # May or may not be provided
+                    expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
                     
-                error_type = error_content.get('error', 'server_error')
-                error_desc = error_content.get('error_description', token_response.text[:100])
+                    # Update refresh token if a new one was provided
+                    if new_refresh_token:
+                        self.refresh_token = new_refresh_token
+                        
+                    # Update token expiry
+                    self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                    
+                    # Update authorization header
+                    token_type = token_data.get('token_type', 'Bearer')
+                    self.session.headers.update({
+                        'Authorization': f'{token_type} {self.access_token}'
+                    })
+                    
+                    # If this URL worked, update the primary token URL
+                    self.oauth_token_url = token_url
+                    
+                    logger.info(f"Successfully refreshed access token using {token_url}, expires in {expires_in} seconds")
+                    return True
+                elif token_response.status_code == 404:
+                    # This URL doesn't exist, try the next one
+                    logger.warning(f"Token URL not found (404): {token_url}")
+                    continue
+                else:
+                    # Handle error response for this URL
+                    try:
+                        error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
+                    except ValueError:
+                        error_content = {}
+                        
+                    error_type = error_content.get('error', 'server_error')
+                    error_desc = error_content.get('error_description', token_response.text[:100])
+                    
+                    logger.warning(f"Token refresh error at {token_url}: {error_type} - {error_desc}")
+                    
+                    # If it's a server error (5xx), try the next URL
+                    if token_response.status_code >= 500:
+                        continue
+                    
+                    # If it's an auth error (401), try the next URL
+                    if token_response.status_code == 401:
+                        continue
+                    
+                    # For other errors like 400 (Bad Request), this URL might be correct but
+                    # there's another issue with the request, so stop and report the error
+                    if token_response.status_code == 400:
+                        logger.error(f"Token refresh failed at {token_url} with 400 Bad Request - there may be an issue with the refresh token or credentials")
+                        return False
+                    
+            except requests.RequestException as e:
+                # Network error for this URL, try the next one
+                logger.warning(f"Network error connecting to {token_url}: {str(e)}")
+                continue
                 
-                logger.error(f"Token refresh error: {error_type} - {error_desc}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error refreshing access token: {str(e)}")
-            return False
+        # If we get here, all token URLs failed
+        logger.error("Token refresh failed - all token URLs returned errors")
+        return False
         
     def is_connected(self):
         """Check if the API connection is working and return connection status.

@@ -20,40 +20,98 @@ logger = logging.getLogger('schwab_oauth2_test')
 # https://developer.schwab.com/products/trader-api--individual/details/specifications/Retail%20Trader%20API%20Production
 # Try multiple patterns to find the right one
 SANDBOX_AUTH_URLS = [
+    # Paths with /oauth2/ prefix
     "https://api-sandbox.schwabapi.com/oauth2/authorize",
     "https://api-sandbox.schwabapi.com/v1/oauth2/authorize",
     "https://api-sandbox.schwabapi.com/broker/rest/v1/oauth2/authorize",
+    # Paths with /oauth/ prefix
     "https://api-sandbox.schwabapi.com/oauth/authorize",  # Original v1 endpoint without version
     "https://sandbox.schwabapi.com/broker/rest/oauth/authorize",  # From docs example
-    "https://sandbox.schwabapi.com/broker/rest/v1/oauth/authorize"  # From docs example with version
+    "https://sandbox.schwabapi.com/broker/rest/v1/oauth/authorize",  # From docs example with version
+    # Paths without prefixes
+    "https://developer-auth.schwab.com/authorize",  # Potential new format
+    "https://auth-sandbox.schwabapi.com/authorize",  # Potential alternative
+    # Paths with different domain formats
+    "https://auth.schwab-sandbox.com/authorize",
+    "https://schwabapi.com/sandbox/oauth/authorize",
+    # Paths with additional API paths
+    "https://api-sandbox.schwabapi.com/api/v1/oauth/authorize",
+    "https://api-sandbox.schwabapi.com/api/oauth2/authorize"
 ]
 SANDBOX_TOKEN_URLS = [
+    # Paths with /oauth2/ prefix
     "https://api-sandbox.schwabapi.com/oauth2/token",
     "https://api-sandbox.schwabapi.com/v1/oauth2/token",
     "https://api-sandbox.schwabapi.com/broker/rest/v1/oauth2/token",
+    # Paths with /oauth/ prefix
     "https://api-sandbox.schwabapi.com/oauth/token",  # Original v1 endpoint without version
     "https://sandbox.schwabapi.com/broker/rest/oauth/token",  # From docs example
-    "https://sandbox.schwabapi.com/broker/rest/v1/oauth/token"  # From docs example with version
+    "https://sandbox.schwabapi.com/broker/rest/v1/oauth/token",  # From docs example with version
+    # Paths without prefixes
+    "https://developer-auth.schwab.com/token",  # Potential new format
+    "https://auth-sandbox.schwabapi.com/token",  # Potential alternative
+    # Paths with different domain formats
+    "https://auth.schwab-sandbox.com/token",
+    "https://schwabapi.com/sandbox/oauth/token",
+    # Paths with additional API paths
+    "https://api-sandbox.schwabapi.com/api/v1/oauth/token",
+    "https://api-sandbox.schwabapi.com/api/oauth2/token"
 ]
 PRODUCTION_AUTH_URLS = [
+    # Paths with /oauth2/ prefix
     "https://api.schwabapi.com/oauth2/authorize",
     "https://api.schwabapi.com/v1/oauth2/authorize",
     "https://api.schwabapi.com/broker/rest/v1/oauth2/authorize",
+    # Paths with /oauth/ prefix
     "https://api.schwabapi.com/oauth/authorize",  # Original v1 endpoint without version
     "https://schwabapi.com/broker/rest/oauth/authorize",  # From docs example
     "https://schwabapi.com/broker/rest/v1/oauth/authorize",  # From docs example with version
+    # Paths with www. subdomain
     "https://www.schwabapi.com/oauth/authorize",  # With www
-    "https://www.schwabapi.com/broker/rest/oauth/authorize"  # With www + path
+    "https://www.schwabapi.com/broker/rest/oauth/authorize",  # With www + path
+    # Paths without prefixes
+    "https://developer-auth.schwab.com/authorize",  # Potential new format
+    "https://auth.schwabapi.com/authorize",  # Potential alternative
+    # Paths with different domain formats
+    "https://auth.schwab.com/authorize",
+    "https://schwabapi.com/oauth/authorize",
+    # Paths with additional API paths
+    "https://api.schwabapi.com/api/v1/oauth/authorize",
+    "https://api.schwabapi.com/api/oauth2/authorize",
+    # Paths with 'auth' in domain
+    "https://auth.schwab.com/oauth/authorize",
+    "https://broker-api.schwab.com/oauth/authorize",
+    # Direct Schwab domain
+    "https://www.schwab.com/api/oauth/authorize",
+    "https://developer.schwab.com/oauth/authorize"
 ]
 PRODUCTION_TOKEN_URLS = [
+    # Paths with /oauth2/ prefix
     "https://api.schwabapi.com/oauth2/token",
     "https://api.schwabapi.com/v1/oauth2/token",
     "https://api.schwabapi.com/broker/rest/v1/oauth2/token",
+    # Paths with /oauth/ prefix
     "https://api.schwabapi.com/oauth/token",  # Original v1 endpoint without version
     "https://schwabapi.com/broker/rest/oauth/token",  # From docs example
     "https://schwabapi.com/broker/rest/v1/oauth/token",  # From docs example with version
+    # Paths with www. subdomain
     "https://www.schwabapi.com/oauth/token",  # With www
-    "https://www.schwabapi.com/broker/rest/oauth/token"  # With www + path
+    "https://www.schwabapi.com/broker/rest/oauth/token",  # With www + path
+    # Paths without prefixes
+    "https://developer-auth.schwab.com/token",  # Potential new format
+    "https://auth.schwabapi.com/token",  # Potential alternative
+    # Paths with different domain formats
+    "https://auth.schwab.com/token",
+    "https://schwabapi.com/oauth/token",
+    # Paths with additional API paths
+    "https://api.schwabapi.com/api/v1/oauth/token",
+    "https://api.schwabapi.com/api/oauth2/token",
+    # Paths with 'auth' in domain
+    "https://auth.schwab.com/oauth/token",
+    "https://broker-api.schwab.com/oauth/token",
+    # Direct Schwab domain
+    "https://www.schwab.com/api/oauth/token",
+    "https://developer.schwab.com/oauth/token"
 ]
 
 def test_oauth_flow(use_sandbox=False):
