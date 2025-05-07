@@ -67,8 +67,9 @@ except ImportError:
     logger.warning("Flask-Session not installed. Using Flask's default client-side sessions.")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-# Add datetime to Jinja context
+# Add datetime and now() function to Jinja context
 app.jinja_env.globals.update(datetime=datetime)
+app.jinja_env.globals.update(now=lambda: datetime.now())
 
 # Configure database
 db_url = os.environ.get("DATABASE_URL", "sqlite:///trading_bot.db")

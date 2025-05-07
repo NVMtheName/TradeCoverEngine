@@ -129,107 +129,204 @@
         </div>
     </div>
 
-    <!-- Trade History Table -->
-    <div class="card dashboard-card">
-        <div class="card-header">
-            <i class="fas fa-history me-2"></i> Trade History
-            <span class="badge bg-primary ms-2" id="tradeCount">{{ trades|length }} trades</span>
-        </div>
-        <div class="card-body p-0">
-            {% if trades %}
-                <div class="table-responsive">
-                    <table class="table table-hover" id="tradesTable">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Symbol</th>
-                                <th>Type</th>
-                                <th>Quantity</th>
-                                <th>Price</th>
-                                <th>Strike</th>
-                                <th>Expiry</th>
-                                <th>Status</th>
-                                <th>P/L</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for trade in trades %}
-                                <tr class="trade-row" 
-                                    data-type="{{ trade.trade_type }}" 
-                                    data-status="{{ trade.status }}" 
-                                    data-symbol="{{ trade.symbol }}" 
-                                    data-date="{{ trade.timestamp.strftime('%Y-%m-%d') }}">
-                                    <td>{{ trade.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                                    <td><strong>{{ trade.symbol }}</strong></td>
-                                    <td>
-                                        <span class="badge {% if trade.trade_type == 'COVERED_CALL' %}bg-info
-                                                         {% elif trade.trade_type == 'BUY_STOCK' %}bg-success
-                                                         {% elif trade.trade_type == 'SELL_STOCK' %}bg-danger
-                                                         {% elif trade.trade_type == 'BUY_TO_CLOSE' %}bg-warning
-                                                         {% else %}bg-secondary{% endif %}">
-                                            {{ trade.trade_type.replace('_', ' ') }}
-                                        </span>
-                                    </td>
-                                    <td>{{ trade.quantity }}</td>
-                                    <td>${{ "%.2f"|format(trade.price) }}</td>
-                                    <td>{% if trade.option_strike %}${{ "%.2f"|format(trade.option_strike) }}{% else %}-{% endif %}</td>
-                                    <td>{% if trade.option_expiry %}{{ trade.option_expiry }}{% else %}-{% endif %}</td>
-                                    <td>
-                                        <span class="badge {% if trade.status == 'OPEN' %}bg-primary
-                                                         {% elif trade.status == 'CLOSED' %}bg-success
-                                                         {% elif trade.status == 'EXPIRED' %}bg-secondary
-                                                         {% elif trade.status == 'ASSIGNED' %}bg-warning
-                                                         {% else %}bg-light{% endif %}">
-                                            {{ trade.status }}
-                                        </span>
-                                    </td>
-                                    <td class="{% if trade.profit_loss and trade.profit_loss >= 0 %}text-success{% elif trade.profit_loss %}text-danger{% endif %}">
-                                        {% if trade.profit_loss %}
-                                            {{ "%.2f"|format(trade.profit_loss) }}%
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary view-trade-btn" data-trade-id="{{ trade.id }}">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+    <!-- Trade Source Tabs -->
+    <ul class="nav nav-tabs mb-3" id="tradeSourceTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="db-trades-tab" data-bs-toggle="tab" data-bs-target="#db-trades" type="button" role="tab" aria-controls="db-trades" aria-selected="true">
+                <i class="fas fa-database me-1"></i> Bot Trades
+                <span class="badge bg-primary ms-1">{{ trades|length }}</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="api-trades-tab" data-bs-toggle="tab" data-bs-target="#api-trades" type="button" role="tab" aria-controls="api-trades" aria-selected="false">
+                <i class="fas fa-cloud-download-alt me-1"></i> API Trades
+                <span class="badge bg-primary ms-1">{{ api_trades|default([])|length }}</span>
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content" id="tradeSourceTabsContent">
+        <!-- Bot Trades Tab -->
+        <div class="tab-pane fade show active" id="db-trades" role="tabpanel" aria-labelledby="db-trades-tab">
+            <!-- Trade History Table -->
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <i class="fas fa-history me-2"></i> Bot Trade History
+                    <span class="badge bg-primary ms-2" id="tradeCount">{{ trades|length }} trades</span>
                 </div>
-            {% else %}
-                <div class="text-center p-5">
-                    <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
-                    <h5>No Trade History</h5>
-                    <p class="text-muted">You haven't executed any trades yet.</p>
-                    <a href="{{ url_for('analysis') }}" class="btn btn-primary">
-                        <i class="fas fa-search-dollar me-2"></i> Find Trading Opportunities
-                    </a>
+                <div class="card-body p-0">
+                    {% if trades %}
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="tradesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Symbol</th>
+                                        <th>Type</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Strike</th>
+                                        <th>Expiry</th>
+                                        <th>Status</th>
+                                        <th>P/L</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trade in trades %}
+                                        <tr class="trade-row" 
+                                            data-type="{{ trade.trade_type }}" 
+                                            data-status="{{ trade.status }}" 
+                                            data-symbol="{{ trade.symbol }}" 
+                                            data-date="{{ trade.timestamp.strftime('%Y-%m-%d') }}">
+                                            <td>{{ trade.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                            <td><strong>{{ trade.symbol }}</strong></td>
+                                            <td>
+                                                <span class="badge {% if trade.trade_type == 'COVERED_CALL' %}bg-info
+                                                                 {% elif trade.trade_type == 'BUY_STOCK' %}bg-success
+                                                                 {% elif trade.trade_type == 'SELL_STOCK' %}bg-danger
+                                                                 {% elif trade.trade_type == 'BUY_TO_CLOSE' %}bg-warning
+                                                                 {% else %}bg-secondary{% endif %}">
+                                                    {{ trade.trade_type.replace('_', ' ') }}
+                                                </span>
+                                            </td>
+                                            <td>{{ trade.quantity }}</td>
+                                            <td>${{ "%.2f"|format(trade.price) }}</td>
+                                            <td>{% if trade.option_strike %}${{ "%.2f"|format(trade.option_strike) }}{% else %}-{% endif %}</td>
+                                            <td>{% if trade.option_expiry %}{{ trade.option_expiry }}{% else %}-{% endif %}</td>
+                                            <td>
+                                                <span class="badge {% if trade.status == 'OPEN' %}bg-primary
+                                                                 {% elif trade.status == 'CLOSED' %}bg-success
+                                                                 {% elif trade.status == 'EXPIRED' %}bg-secondary
+                                                                 {% elif trade.status == 'ASSIGNED' %}bg-warning
+                                                                 {% else %}bg-light{% endif %}">
+                                                    {{ trade.status }}
+                                                </span>
+                                            </td>
+                                            <td class="{% if trade.profit_loss and trade.profit_loss >= 0 %}text-success{% elif trade.profit_loss %}text-danger{% endif %}">
+                                                {% if trade.profit_loss %}
+                                                    {{ "%.2f"|format(trade.profit_loss) }}%
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary view-trade-btn" data-trade-id="{{ trade.id }}">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center p-5">
+                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                            <h5>No Bot Trade History</h5>
+                            <p class="text-muted">You haven't executed any trades with the bot yet.</p>
+                            <a href="{{ url_for('analysis') }}" class="btn btn-primary">
+                                <i class="fas fa-search-dollar me-2"></i> Find Trading Opportunities
+                            </a>
+                        </div>
+                    {% endif %}
                 </div>
-            {% endif %}
-        </div>
-        <div class="card-footer d-flex justify-content-between align-items-center">
-            <div>
-                <small class="text-muted">Showing <span id="visibleTrades">{{ trades|length }}</span> of {{ trades|length }} trades</small>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Showing <span id="visibleTrades">{{ trades|length }}</span> of {{ trades|length }} trades</small>
+                    </div>
+                    <div>
+                        <nav aria-label="Trade history pagination">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#" tabindex="-1">Previous</a>
+                                </li>
+                                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                <li class="page-item"><a class="page-link" href="#">2</a></li>
+                                <li class="page-item"><a class="page-link" href="#">3</a></li>
+                                <li class="page-item">
+                                    <a class="page-link" href="#">Next</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
             </div>
-            <div>
-                <nav aria-label="Trade history pagination">
-                    <ul class="pagination pagination-sm mb-0">
-                        <li class="page-item disabled">
-                            <a class="page-link" href="#" tabindex="-1">Previous</a>
-                        </li>
-                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                        <li class="page-item"><a class="page-link" href="#">2</a></li>
-                        <li class="page-item"><a class="page-link" href="#">3</a></li>
-                        <li class="page-item">
-                            <a class="page-link" href="#">Next</a>
-                        </li>
-                    </ul>
-                </nav>
+        </div>
+        
+        <!-- API Trades Tab -->
+        <div class="tab-pane fade" id="api-trades" role="tabpanel" aria-labelledby="api-trades-tab">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <i class="fas fa-exchange-alt me-2"></i> API Trade History
+                    <span class="badge bg-primary ms-2">{{ api_trades|default([])|length }} trades</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if api_trades and api_trades|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="apiTradesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Symbol</th>
+                                        <th>Type</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Amount</th>
+                                        <th>Fees</th>
+                                        <th>Description</th>
+                                        <th>Settlement</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trade in api_trades %}
+                                        <tr class="api-trade-row" 
+                                            data-type="{{ trade.type }}" 
+                                            data-symbol="{{ trade.symbol|default('') }}" 
+                                            data-date="{{ trade.date }}">
+                                            <td>{{ trade.date }}</td>
+                                            <td><strong>{{ trade.symbol|default('-') }}</strong></td>
+                                            <td>
+                                                <span class="badge {% if trade.instruction|default('') == 'buy' %}bg-success
+                                                                 {% elif trade.instruction|default('') == 'sell' %}bg-danger
+                                                                 {% else %}bg-secondary{% endif %}">
+                                                    {{ trade.instruction|default('-')|upper }}
+                                                </span>
+                                            </td>
+                                            <td>{{ trade.quantity|default('-') }}</td>
+                                            <td>{% if trade.price %}${{ "%.2f"|format(trade.price) }}{% else %}-{% endif %}</td>
+                                            <td>${{ "%.2f"|format(trade.amount) }}</td>
+                                            <td>${{ "%.2f"|format(trade.fees) }}</td>
+                                            <td>{{ trade.description }}</td>
+                                            <td>{{ trade.settlement_date|default('-') }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center p-5">
+                            <i class="fas fa-cloud fa-3x text-muted mb-3"></i>
+                            <h5>No API Trade History Available</h5>
+                            <p class="text-muted">No trade data was retrieved from the API.</p>
+                            <p class="text-muted small mb-3">This could be because you need to connect to your broker's API or because no trades were found in the requested time period.</p>
+                            <a href="{{ url_for('settings') }}" class="btn btn-primary">
+                                <i class="fas fa-cog me-2"></i> Configure API Connection
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i> 
+                            API trades are retrieved directly from your brokerage account.
+                        </small>
+                    </div>
+                    <div>
+                        <small class="text-muted">Last updated: {{ now().strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
