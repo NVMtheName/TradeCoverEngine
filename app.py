@@ -596,8 +596,44 @@ def settings():
 @app.route('/trades')
 @login_required
 def trades():
-    all_trades = Trade.query.filter_by(user_id=current_user.id).order_by(Trade.timestamp.desc()).all()
-    return render_template('trades.html', trades=all_trades)
+    # Get trades from the database
+    db_trades = Trade.query.filter_by(user_id=current_user.id).order_by(Trade.timestamp.desc()).all()
+    
+    # Try to get additional trade data from the API
+    api_trades = []
+    if api_connector and api_connector.provider == 'schwab':
+        try:
+            # Sync tokens before API request
+            if hasattr(api_connector, 'schwab_connector'):
+                settings = Settings.query.filter_by(user_id=current_user.id).first()
+                if settings and settings.oauth_access_token:
+                    api_connector.schwab_connector.access_token = settings.oauth_access_token
+                    api_connector.schwab_connector.refresh_token = settings.oauth_refresh_token
+                    api_connector.schwab_connector.token_expiry = settings.oauth_token_expiry
+                
+                    # Use specialized connector for enhanced trade history
+                    logger.info("Attempting to retrieve trade history from Schwab API")
+                    trade_history = api_connector.schwab_connector.get_trade_history(
+                        start_date=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'),
+                        end_date=datetime.now().strftime('%Y-%m-%d')
+                    )
+                    
+                    if trade_history:
+                        api_trades = trade_history
+                        logger.info(f"Successfully retrieved {len(api_trades)} trades from Schwab API")
+                        
+                        # If token was refreshed, update in database
+                        if api_connector.schwab_connector.access_token != settings.oauth_access_token:
+                            settings.oauth_access_token = api_connector.schwab_connector.access_token
+                            settings.oauth_refresh_token = api_connector.schwab_connector.refresh_token
+                            settings.oauth_token_expiry = api_connector.schwab_connector.token_expiry
+                            db.session.commit()
+                            logger.info("Updated OAuth tokens in database after trade history request")
+        except Exception as e:
+            logger.error(f"Error retrieving trade history from API: {str(e)}")
+    
+    # Return both database trades and API trades
+    return render_template('trades.html', trades=db_trades, api_trades=api_trades)
 
 @app.route('/analysis')
 @login_required

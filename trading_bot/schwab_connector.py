@@ -595,6 +595,247 @@ class SchwabConnector:
             logger.error(f"Error getting Schwab orders: {str(e)}")
             return None
     
+    def get_transaction_history(self, account_id=None, start_date=None, end_date=None, transaction_type=None):
+        """
+        Get transaction history for a specific account.
+        
+        Args:
+            account_id (str, optional): Specific account ID to get transactions for
+                If not provided, will use the first account from get_account_info()
+            start_date (str/datetime, optional): Start date for transactions (YYYY-MM-DD)
+            end_date (str/datetime, optional): End date for transactions (YYYY-MM-DD)
+            transaction_type (str, optional): Filter by transaction type ('TRADE', 'CASH', 'DIVIDEND', etc.)
+        
+        Returns:
+            list: List of transaction dictionaries, each containing transaction details
+        """
+        # Check if we have a valid access token
+        if not self.access_token:
+            logger.warning("No access token available for Schwab API")
+            return None
+        
+        # Refresh token if needed
+        if self.is_token_expired():
+            logger.info("Access token expired, refreshing before request")
+            if not self.refresh_access_token():
+                logger.warning("Failed to refresh token for transaction history request")
+                return None
+        
+        # Get account ID if not provided
+        if not account_id:
+            accounts = self.get_account_info()
+            if not accounts:
+                logger.warning("Could not determine account ID for transaction history")
+                return None
+            account_id = list(accounts.keys())[0]
+        
+        # Format dates for API request
+        if start_date:
+            if isinstance(start_date, datetime):
+                start_date = start_date.strftime('%Y-%m-%d')
+        
+        if end_date:
+            if isinstance(end_date, datetime):
+                end_date = end_date.strftime('%Y-%m-%d')
+        
+        # Prepare query parameters
+        params = {}
+        if start_date:
+            params['startDate'] = start_date
+        if end_date:
+            params['endDate'] = end_date
+        if transaction_type:
+            params['type'] = transaction_type
+        
+        # Make the API request
+        try:
+            # Endpoint based on Schwab API documentation
+            transactions_url = f"{self.api_base_url}/accounts/{account_id}/transactions"
+            response = self._execute_request('GET', transactions_url, params=params)
+            
+            if response and response.status_code == 200:
+                transactions_data = response.json()
+                logger.info(f"Successfully retrieved {len(transactions_data)} transactions from Schwab API")
+                
+                result = []
+                
+                for transaction in transactions_data:
+                    # Extract and normalize transaction data
+                    transaction_type = transaction.get('type', '')
+                    
+                    # Create standardized transaction object
+                    transaction_obj = {
+                        'id': transaction.get('transactionId'),
+                        'date': transaction.get('transactionDate'),
+                        'settlement_date': transaction.get('settlementDate'),
+                        'type': transaction_type,
+                        'description': transaction.get('description', ''),
+                        'amount': float(transaction.get('amount', 0)),
+                        'fees': float(transaction.get('fees', 0)) if 'fees' in transaction else 0,
+                    }
+                    
+                    # Add additional fields based on transaction type
+                    if transaction_type == 'TRADE':
+                        trade_info = transaction.get('transactionItem', {})
+                        transaction_obj.update({
+                            'symbol': trade_info.get('symbol'),
+                            'quantity': float(trade_info.get('quantity', 0)),
+                            'price': float(trade_info.get('price', 0)),
+                            'instruction': trade_info.get('instruction', '').lower(),  # BUY, SELL, etc.
+                            'asset_type': trade_info.get('assetType'),
+                        })
+                    elif transaction_type == 'DIVIDEND':
+                        dividend_info = transaction.get('transactionItem', {})
+                        transaction_obj.update({
+                            'symbol': dividend_info.get('symbol'),
+                            'dividend_rate': float(dividend_info.get('dividendRate', 0)),
+                        })
+                    
+                    result.append(transaction_obj)
+                
+                return result
+            
+            logger.warning(f"Failed to get transaction history: {response.status_code if response else 'No response'}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting Schwab transaction history: {str(e)}")
+            return None
+    
+    def get_trade_history(self, account_id=None, start_date=None, end_date=None, symbol=None):
+        """
+        Get trade history for a specific account, filtered to include only actual trades.
+        
+        This is a specialized wrapper around get_transaction_history that only returns
+        transactions of type 'TRADE' for easier trade analysis.
+        
+        Args:
+            account_id (str, optional): Specific account ID to get transactions for
+                If not provided, will use the first account from get_account_info()
+            start_date (str/datetime, optional): Start date for transactions (YYYY-MM-DD)
+            end_date (str/datetime, optional): End date for transactions (YYYY-MM-DD)
+            symbol (str, optional): Filter by specific symbol
+        
+        Returns:
+            list: List of trade dictionaries, each containing trade details
+        """
+        # Get all trade transactions
+        transactions = self.get_transaction_history(
+            account_id=account_id,
+            start_date=start_date,
+            end_date=end_date,
+            transaction_type='TRADE'
+        )
+        
+        if not transactions:
+            return None
+        
+        # Filter by symbol if provided
+        if symbol:
+            transactions = [t for t in transactions if t.get('symbol') == symbol]
+        
+        return transactions
+    
+    def get_account_performance(self, account_id=None, start_date=None, end_date=None):
+        """
+        Get account performance data including daily equity values.
+        
+        Args:
+            account_id (str, optional): Specific account ID to get performance for
+                If not provided, will use the first account from get_account_info()
+            start_date (str/datetime, optional): Start date (YYYY-MM-DD)
+            end_date (str/datetime, optional): End date (YYYY-MM-DD)
+        
+        Returns:
+            dict: Dictionary with performance data including:
+                - daily_equity: List of daily equity values
+                - dates: List of corresponding dates
+                - performance_metrics: Dictionary of performance metrics
+        """
+        # Check if we have a valid access token
+        if not self.access_token:
+            logger.warning("No access token available for Schwab API")
+            return None
+        
+        # Refresh token if needed
+        if self.is_token_expired():
+            logger.info("Access token expired, refreshing before request")
+            if not self.refresh_access_token():
+                logger.warning("Failed to refresh token for account performance request")
+                return None
+        
+        # Get account ID if not provided
+        if not account_id:
+            accounts = self.get_account_info()
+            if not accounts:
+                logger.warning("Could not determine account ID for account performance")
+                return None
+            account_id = list(accounts.keys())[0]
+        
+        # Format dates for API request
+        if not start_date:
+            # Default to last 30 days
+            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        elif isinstance(start_date, datetime):
+            start_date = start_date.strftime('%Y-%m-%d')
+        
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        elif isinstance(end_date, datetime):
+            end_date = end_date.strftime('%Y-%m-%d')
+        
+        # Make the API request
+        try:
+            # Endpoint based on Schwab API documentation
+            performance_url = f"{self.api_base_url}/accounts/{account_id}/performance"
+            params = {
+                'startDate': start_date,
+                'endDate': end_date
+            }
+            
+            response = self._execute_request('GET', performance_url, params=params)
+            
+            if response and response.status_code == 200:
+                performance_data = response.json()
+                logger.info("Successfully retrieved account performance data from Schwab API")
+                
+                # Extract and format daily equity values
+                daily_equity = []
+                dates = []
+                
+                if 'equity' in performance_data:
+                    equity_data = performance_data['equity']
+                    for entry in equity_data:
+                        if 'date' in entry and 'value' in entry:
+                            dates.append(entry['date'])
+                            daily_equity.append(float(entry['value']))
+                
+                # Extract performance metrics
+                performance_metrics = {}
+                if 'metrics' in performance_data:
+                    metrics = performance_data['metrics']
+                    performance_metrics = {
+                        'total_return': float(metrics.get('totalReturn', 0)) * 100,  # Convert to percentage
+                        'annualized_return': float(metrics.get('annualizedReturn', 0)) * 100,  # Convert to percentage
+                        'max_drawdown': float(metrics.get('maxDrawdown', 0)) * 100,  # Convert to percentage
+                        'sharpe_ratio': float(metrics.get('sharpeRatio', 0)),
+                        'alpha': float(metrics.get('alpha', 0)),
+                        'beta': float(metrics.get('beta', 0)),
+                    }
+                
+                return {
+                    'daily_equity': daily_equity,
+                    'dates': dates,
+                    'performance_metrics': performance_metrics
+                }
+            
+            logger.warning(f"Failed to get account performance: {response.status_code if response else 'No response'}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting Schwab account performance: {str(e)}")
+            return None
+    
     def get_market_data(self, symbols, fields=None):
         """
         Get market data for specified symbols.

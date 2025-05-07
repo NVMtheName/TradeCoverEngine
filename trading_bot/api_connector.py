@@ -2198,16 +2198,56 @@ class APIConnector:
                 return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             elif self.provider == 'schwab':
-                # Check if we have a valid access token
-                if not self.access_token:
-                    logger.warning("No access token available for Schwab API")
+                # Use our specialized Schwab connector for improved reliability
+                if self.force_simulation:
+                    logger.info("Using simulation mode for Schwab account history")
                     return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
-                # In a real implementation, you would make an API call to Schwab
-                # Since we don't have actual Schwab API docs, we'll simulate a response
-                logger.info("Simulating Schwab account history request")
+                # Sync tokens with specialized connector
+                if self.access_token:
+                    self.schwab_connector.access_token = self.access_token
+                    self.schwab_connector.refresh_token = self.refresh_token
+                    self.schwab_connector.token_expiry = self.token_expiry
                 
-                return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
+                try:
+                    logger.info("Retrieving account performance using specialized Schwab connector")
+                    performance_data = self.schwab_connector.get_account_performance(
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    
+                    if performance_data and 'daily_equity' in performance_data and 'dates' in performance_data:
+                        logger.info(f"Successfully retrieved Schwab account performance data with {len(performance_data['dates'])} data points")
+                        
+                        # If token was refreshed in the specialized connector, sync it back
+                        if self.schwab_connector.access_token != self.access_token:
+                            logger.info("Synchronizing refreshed tokens from specialized connector")
+                            self.access_token = self.schwab_connector.access_token
+                            self.refresh_token = self.schwab_connector.refresh_token
+                            self.token_expiry = self.schwab_connector.token_expiry
+                            
+                            # Update session headers
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
+                            })
+                        
+                        # Convert the performance data to a pandas DataFrame
+                        import pandas as pd
+                        df = pd.DataFrame({
+                            'date': pd.to_datetime(performance_data['dates']),
+                            'equity': performance_data['daily_equity']
+                        })
+                        
+                        # Set date as index to match the expected return format
+                        df = df.set_index('date')
+                        
+                        return df
+                    else:
+                        logger.warning("Failed to get account performance data from Schwab API or data is empty")
+                        return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
+                except Exception as e:
+                    logger.error(f"Error getting Schwab account performance: {str(e)}")
+                    return self._get_simulated_account_history(start_date=start_date, end_date=end_date)
                 
             else:
                 logger.error(f"Unsupported provider: {self.provider}")
