@@ -118,6 +118,8 @@ def load_user(user_id):
 from trading_bot.api_connector import APIConnector
 from trading_bot.stock_analyzer import StockAnalyzer
 from trading_bot.strategies import CoveredCallStrategy, PutCreditSpreadStrategy, IronCondorStrategy
+from trading_bot.wheel_strategy import WheelStrategy
+from trading_bot.collar_strategy import CollarStrategy
 from trading_bot.trade_executor import TradeExecutor
 from trading_bot.ai_advisor import AIAdvisor
 from trading_bot.auto_trader import AutoTrader
@@ -239,9 +241,23 @@ def initialize_app():
             # Create strategies based on enabled_strategies setting
             enabled_strategies = settings.enabled_strategies.split(',') if settings.enabled_strategies else ['covered_call']
             
-            # Default to covered call strategy
+            # Choose strategy based on user's selection - using the first in the list as the primary strategy
             if 'covered_call' in enabled_strategies:
                 strategy = CoveredCallStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
+            elif 'wheel' in enabled_strategies:
+                strategy = WheelStrategy(
+                    risk_level=settings.risk_level,
+                    profit_target_percentage=settings.profit_target_percentage,
+                    stop_loss_percentage=settings.stop_loss_percentage,
+                    options_expiry_days=settings.options_expiry_days
+                )
+            elif 'collar' in enabled_strategies:
+                strategy = CollarStrategy(
                     risk_level=settings.risk_level,
                     profit_target_percentage=settings.profit_target_percentage,
                     stop_loss_percentage=settings.stop_loss_percentage,
@@ -498,6 +514,12 @@ def dashboard():
         open_positions=open_positions,
         performance_data=performance_data
     )
+
+@app.route('/strategy_info')
+@login_required
+def strategy_info():
+    """Display information about trading strategies"""
+    return render_template('strategy_info.html')
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required

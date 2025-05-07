@@ -167,7 +167,7 @@
                             <div class="form-group mb-3">
                                 <label class="form-label">Select Strategy</label>
                                 <div class="d-flex flex-wrap strategy-selector">
-                                    <h6 class="w-100 mb-2">Options Strategies</h6>
+                                    <h6 class="w-100 mb-2">Basic Options Strategies</h6>
                                     <div class="form-check form-check-inline me-4 mb-3">
                                         <input class="form-check-input" type="checkbox" id="strategy_covered_call" name="enabled_strategies" value="covered_call" 
                                                {% if 'covered_call' in settings.enabled_strategies %}checked{% endif %}>
@@ -179,6 +179,30 @@
                                             <small class="d-block text-muted">Sell call options against stock holdings</small>
                                         </label>
                                     </div>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_wheel" name="enabled_strategies" value="wheel" 
+                                               {% if 'wheel' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_wheel">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">Basic</span>
+                                                Wheel Strategy
+                                            </div>
+                                            <small class="d-block text-muted">Cycle between puts and covered calls for income</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_collar" name="enabled_strategies" value="collar" 
+                                               {% if 'collar' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_collar">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">Basic</span>
+                                                Collar
+                                            </div>
+                                            <small class="d-block text-muted">Protect stock with puts while selling calls</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <h6 class="w-100 mb-2 mt-3">Advanced Options Strategies</h6>
                                     <div class="form-check form-check-inline me-4 mb-3">
                                         <input class="form-check-input" type="checkbox" id="strategy_put_credit_spread" name="enabled_strategies" value="put_credit_spread" 
                                                {% if 'put_credit_spread' in settings.enabled_strategies %}checked{% endif %}>
@@ -195,7 +219,7 @@
                                                {% if 'iron_condor' in settings.enabled_strategies %}checked{% endif %}>
                                         <label class="form-check-label" for="strategy_iron_condor">
                                             <div class="d-flex align-items-center">
-                                                <span class="badge bg-warning me-2">Advanced</span>
+                                                <span class="badge bg-info me-2">Advanced</span>
                                                 Iron Condor
                                             </div>
                                             <small class="d-block text-muted">Market-neutral strategy with defined risk</small>
@@ -275,6 +299,9 @@
                                 </div>
                                 <div class="form-text mb-3">
                                     Select strategies to enable. Multiple strategies can be active simultaneously.
+                                    <a href="{{ url_for('strategy_info') }}" class="ms-2 text-decoration-none">
+                                        <i class="fas fa-info-circle"></i> Learn more about these strategies
+                                    </a>
                                 </div>
                             </div>
                             

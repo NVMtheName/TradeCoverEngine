@@ -1,0 +1,403 @@
+{% extends "layout.html" %}
+
+{% block title %}Trading Strategies - Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-chart-line me-2"></i> Trading Strategies</h1>
+        <div>
+            <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
+                <i class="fas fa-cog me-1"></i> Back to Settings
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <div class="d-flex">
+            <div class="me-3">
+                <i class="fas fa-info-circle fa-2x"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading">Understanding Options Strategies</h5>
+                <p>Each strategy has its own risk/reward profile and works best in different market conditions. Choose strategies that align with your market outlook and risk tolerance.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Basic Strategies Section -->
+        <div class="col-12 mb-4">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i> Basic Options Strategies</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Covered Call Strategy -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Covered Call</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>Sell call options against stock you already own to generate income.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you expect the stock to remain flat or rise slightly</li>
+                                        <li>When you want to generate income from existing holdings</li>
+                                        <li>When you're willing to limit upside potential for premium income</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 35%;" aria-valuenow="35" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 20%;" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Wheel Strategy -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Wheel Strategy</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>A systematic income approach that cycles between selling cash-secured puts and covered calls.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you want consistent income generation</li>
+                                        <li>When you're willing to own the underlying stock long-term</li>
+                                        <li>In moderately bullish or neutral markets</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 35%;" aria-valuenow="35" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 45%;" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 40%;" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Collar Strategy -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Collar Strategy</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>Protect a stock position by buying a protective put and selling a covered call, creating a range with defined risk/reward.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you want to protect existing stock positions</li>
+                                        <li>During periods of heightened market uncertainty</li>
+                                        <li>When you're willing to cap upside in exchange for downside protection</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 15%;" aria-valuenow="15" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 45%;" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Advanced Strategies Section -->
+        <div class="col-12 mb-4">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-jedi me-2"></i> Advanced Options Strategies</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Put Credit Spread -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Put Credit Spread</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>Simultaneously sell a put option and buy a lower-strike put option, creating a bullish position with defined risk.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you have a bullish or neutral market outlook</li>
+                                        <li>When you want defined risk without owning the underlying stock</li>
+                                        <li>When implied volatility is relatively high</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 40%;" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 35%;" aria-valuenow="35" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 60%;" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Iron Condor -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Iron Condor</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>A market-neutral strategy combining a bull put spread and a bear call spread, profiting when the stock stays within a range.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you expect the stock to remain within a defined range</li>
+                                        <li>During low volatility or sideways markets</li>
+                                        <li>When you want to profit from time decay with defined risk</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 45%;" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 40%;" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 75%;" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Iron Butterfly -->
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 strategy-card">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">Iron Butterfly</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6>Overview</h6>
+                                    <p>A market-neutral strategy similar to an iron condor but with tighter strikes, offering higher potential profits in a narrower range.</p>
+                                    
+                                    <h6>When to Use</h6>
+                                    <ul class="small">
+                                        <li>When you expect very little price movement in the underlying</li>
+                                        <li>When you want to maximize theta decay</li>
+                                        <li>When you have a strong conviction about a specific price target</li>
+                                    </ul>
+                                    
+                                    <h6>Risk Profile</h6>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Risk:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 55%;" aria-valuenow="55" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-2">
+                                        <div class="me-2 small">Reward:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex mb-3">
+                                        <div class="me-2 small">Complexity:</div>
+                                        <div class="progress flex-grow-1 align-self-center" style="height: 8px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 85%;" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-12 mb-4">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-book me-2"></i> Strategy Learning Resources</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-video me-2"></i> Video Tutorials</h5>
+                                    <p class="card-text">Watch step-by-step explanations of each trading strategy.</p>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">View Videos</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-graduation-cap me-2"></i> Strategy Guide</h5>
+                                    <p class="card-text">Comprehensive guide to all supported trading strategies.</p>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">Download PDF</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-chart-line me-2"></i> Backtesting Results</h5>
+                                    <p class="card-text">Historical performance data for each strategy.</p>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">View Results</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategy Selection Modal - Access from settings page -->
+<div class="modal fade" id="strategySelectionModal" tabindex="-1" aria-labelledby="strategySelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="strategySelectionModalLabel">Select Trading Strategies</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Strategies</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_covered_call" checked>
+                            <label class="form-check-label" for="modal_covered_call">Covered Call</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_wheel">
+                            <label class="form-check-label" for="modal_wheel">Wheel Strategy</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_collar">
+                            <label class="form-check-label" for="modal_collar">Collar</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Advanced Strategies</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_put_credit_spread">
+                            <label class="form-check-label" for="modal_put_credit_spread">Put Credit Spread</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_iron_condor">
+                            <label class="form-check-label" for="modal_iron_condor">Iron Condor</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="modal_iron_butterfly">
+                            <label class="form-check-label" for="modal_iron_butterfly">Iron Butterfly</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveStrategySelections">Save Selections</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add any strategy info page specific JavaScript here
+        
+        // Example: Strategy cards hover effect
+        const strategyCards = document.querySelectorAll('.strategy-card');
+        strategyCards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.classList.add('shadow-lg');
+            });
+            card.addEventListener('mouseleave', function() {
+                this.classList.remove('shadow-lg');
+            });
+        });
+    });
+</script>
+{% endblock %}
