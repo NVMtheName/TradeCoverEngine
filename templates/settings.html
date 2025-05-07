@@ -545,6 +545,22 @@
 
 {% block extra_js %}
 <script>
+    // Toggle API key visibility
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('toggleApiKey');
+        const apiKeyInput = document.getElementById('openai_api_key');
+        
+        if (toggleBtn && apiKeyInput) {
+            toggleBtn.addEventListener('click', function() {
+                const type = apiKeyInput.type;
+                apiKeyInput.type = type === 'password' ? 'text' : 'password';
+                toggleBtn.innerHTML = type === 'password' ? 
+                    '<i class="fas fa-eye-slash"></i>' : 
+                    '<i class="fas fa-eye"></i>';
+            });
+        }
+    });
+    
     // Function to update the OAuth sections based on selected provider
     function updateProviderSpecificSections() {
         const provider = document.getElementById('api_provider').value;

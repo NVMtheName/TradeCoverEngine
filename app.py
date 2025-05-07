@@ -293,10 +293,31 @@ def initialize_app():
             )
             
             # Initialize AI advisor
-            ai_advisor = AIAdvisor()
+            # Get AI settings from default settings
+            default_settings = Settings.query.filter_by(user_id=None).first()
+            openai_api_key = None
+            enable_ai_advisor = True
+            ai_model_selection = 'auto'
+            
+            if default_settings:
+                openai_api_key = default_settings.openai_api_key
+                enable_ai_advisor = default_settings.enable_ai_advisor
+                ai_model_selection = default_settings.ai_model_selection
+                logger.info(f"Using AI settings from default settings: enabled={enable_ai_advisor}, model_strategy={ai_model_selection}")
+            
+            # Initialize AI advisor with settings
+            if enable_ai_advisor:
+                ai_advisor = AIAdvisor(
+                    custom_api_key=openai_api_key,
+                    model_selection_strategy=ai_model_selection
+                )
+                logger.info(f"AI advisor initialized with custom settings")
+            else:
+                ai_advisor = None
+                logger.info("AI advisor disabled in settings")
             
             # Initialize auto trader if AI advisor is available
-            if ai_advisor.is_available():
+            if ai_advisor and ai_advisor.is_available():
                 auto_trader = AutoTrader(
                     api_connector=api_connector,
                     ai_advisor=ai_advisor,
@@ -573,6 +594,12 @@ def settings():
             settings.forex_leverage = float(request.form.get('forex_leverage'))
             settings.forex_lot_size = float(request.form.get('forex_lot_size'))
             
+            # Process AI settings
+            settings.openai_api_key = request.form.get('openai_api_key', '')
+            settings.enable_ai_advisor = 'enable_ai_advisor' in request.form
+            settings.ai_model_selection = request.form.get('ai_model_selection', 'auto')
+            logger.info(f"Updated AI settings: AI enabled={settings.enable_ai_advisor}, model strategy={settings.ai_model_selection}")
+            
             # Handle multiple strategy selections
             enabled_strategies = request.form.getlist('enabled_strategies')
             if not enabled_strategies:
@@ -592,7 +619,25 @@ def settings():
             logger.error(f"Error updating settings: {str(e)}")
             flash(f"Error updating settings: {str(e)}", "danger")
     
-    return render_template('settings.html', settings=settings)
+    # Get AI status for settings page
+    ai_enabled = settings.enable_ai_advisor if hasattr(settings, 'enable_ai_advisor') else True
+    openai_api_key = settings.openai_api_key if hasattr(settings, 'openai_api_key') else ""
+    
+    # Set AI status based on the advisor's availability
+    ai_status = "inactive"
+    if ai_advisor:
+        if ai_advisor.is_available():
+            ai_status = "active"
+        elif len(ai_advisor.available_models) > 0:
+            ai_status = "limited"  # Some models available but not all
+    
+    return render_template(
+        'settings.html', 
+        settings=settings, 
+        ai_enabled=ai_enabled,
+        ai_status=ai_status,
+        openai_api_key=openai_api_key
+    )
 
 @app.route('/trades')
 @login_required
