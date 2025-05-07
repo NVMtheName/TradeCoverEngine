@@ -521,6 +521,13 @@ def strategy_info():
     """Display information about trading strategies"""
     return render_template('strategy_info.html')
 
+@app.route('/api-diagnostics')
+@login_required
+def api_diagnostics():
+    """Display API connection diagnostics tools"""
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
+    return render_template('api_diagnostics.html', settings=settings)
+
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
@@ -713,7 +720,7 @@ def stock_data(symbol):
 
 @app.route('/api/test-connection', methods=['POST'])
 def test_api_connection():
-    """Test the API connection with provided credentials"""
+    """Test the API connection with provided credentials and provide detailed diagnostics"""
     try:
         # Get connection parameters from POST request
         data = request.json
@@ -721,35 +728,92 @@ def test_api_connection():
         api_key = data.get('api_key', '')
         api_secret = data.get('api_secret', '')
         is_paper_trading = data.get('is_paper_trading', True)
+        access_token = data.get('access_token', None)
         
-        # Create a temporary connector to test the connection
-        temp_connector = APIConnector(
-            provider=provider,
+        # Import the diagnostics module
+        from trading_bot.api_diagnostics import APIDiagnostics
+        
+        # Create diagnostics object and run tests
+        diagnostics = APIDiagnostics(provider)
+        results = diagnostics.test_api_connection(
             api_key=api_key,
             api_secret=api_secret,
             paper_trading=is_paper_trading,
-            force_simulation=data.get('force_simulation_mode', False)
+            access_token=access_token
         )
         
-        # Test the connection
-        is_connected = temp_connector.is_connected()
-        
-        if is_connected:
-            return jsonify({
-                'success': True,
-                'message': 'API connection successful! Your credentials are valid.'
-            })
+        # Create a more user-friendly message based on results
+        if results['connection']:
+            message = 'Connection successful! Your credentials are valid.'
+            if results['status'] == 'partial':
+                message = 'Connection partially successful. Some API endpoints were reachable, others had issues.'
         else:
-            # Get additional details from the connector
-            return jsonify({
-                'success': False,
-                'message': 'Could not connect to the API. Please check your credentials and try again.'
-            })
+            message = 'Could not connect to the API. Please check the diagnostic information for details.'
+        
+        # Add helpful suggestions from the diagnostic results
+        suggestions = results.get('suggestions', [])
+        if suggestions:
+            message += ' ' + suggestions[0]  # Add the first suggestion to the main message
+        
+        # Create a temporary connector to also check if normal connection would work
+        # This lets us compare our detailed diagnostics with the standard connection check
+        try:
+            temp_connector = APIConnector(
+                provider=provider,
+                api_key=api_key,
+                api_secret=api_secret,
+                paper_trading=is_paper_trading,
+                force_simulation=data.get('force_simulation_mode', False)
+            )
+            
+            # Test the connection using the standard method
+            standard_connection = temp_connector.is_connected()
+            
+            # If standard connection works but our diagnostics show issues, or vice versa,
+            # add this information to the results
+            if standard_connection != results['connection']:
+                if standard_connection:
+                    results['warnings'].append("Standard connection check passed, but detailed diagnostics found issues")
+                else:
+                    results['warnings'].append("Standard connection check failed, but some endpoints may be accessible")
+                
+            # Include account info from the connector if available
+            try:
+                if standard_connection:
+                    account_info = temp_connector.get_account_info()
+                    if account_info:
+                        results['account_info'] = account_info
+            except Exception as e:
+                logger.warning(f"Failed to get account info during connection test: {str(e)}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to create standard connector during diagnostics: {str(e)}")
+            results['warnings'].append(f"Standard connection check error: {str(e)}")
+            
+        # Return comprehensive results
+        return jsonify({
+            'success': results['connection'],
+            'message': message,
+            'status': results['status'],
+            'provider': provider,
+            'paper_trading': is_paper_trading,
+            'diagnostic_results': results,
+            'timestamp': datetime.now().isoformat(),
+            'all_suggestions': suggestions
+        })
+        
     except Exception as e:
         logger.error(f"Error testing API connection: {str(e)}")
+        # Include full traceback for better debugging
+        error_traceback = traceback.format_exc()
+        logger.error(f"Traceback: {error_traceback}")
+        
         return jsonify({
             'success': False,
-            'message': f'Error: {str(e)}'
+            'message': f'Error during API diagnostics: {str(e)}',
+            'error_details': str(e),
+            'traceback': error_traceback if app.debug else "Enable debug mode to see traceback",
+            'timestamp': datetime.now().isoformat()
         }), 500
         
 @app.route('/oauth/initiate')

@@ -1,0 +1,1202 @@
+{% extends "layout.html" %}
+
+{% block title %}API Connection Diagnostics - Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-network-wired me-2"></i> API Connection Diagnostics</h1>
+        <div>
+            <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
+                <i class="fas fa-cog me-2"></i> Back to Settings
+            </a>
+        </div>
+    </div>
+
+    <!-- Connection Status Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i> Connection Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div id="connection-status-icon" class="me-3">
+                            <i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i>
+                        </div>
+                        <div>
+                            <h5 id="connection-status-title" class="mb-1">Testing connection...</h5>
+                            <p id="connection-status-message" class="mb-0 text-muted">Please wait while we diagnose your API connection.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-4" style="height: 8px;">
+                        <div id="connection-progress" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" style="width: 25%"></div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-info-circle me-2"></i> Connection Details</h6>
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Provider</dt>
+                                        <dd class="col-sm-8" id="provider-display">{{ settings.api_provider|default('alpaca')|capitalize }}</dd>
+                                        
+                                        <dt class="col-sm-4">Environment</dt>
+                                        <dd class="col-sm-8" id="environment-display">
+                                            {% if settings.is_paper_trading %}
+                                                Paper Trading
+                                            {% else %}
+                                                Live Trading
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Last Tested</dt>
+                                        <dd class="col-sm-8" id="last-tested">
+                                            <span class="badge bg-secondary">Not tested yet</span>
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100 primary-action-card">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-tools me-2"></i> Connection Tools</h6>
+                                    <p class="card-text">Run diagnostics or troubleshoot your API connection.</p>
+                                    <div class="d-grid gap-2">
+                                        <button id="run-diagnostics-btn" class="btn btn-primary">
+                                            <i class="fas fa-stethoscope me-2"></i> Run Advanced Diagnostics
+                                        </button>
+                                        <button id="test-endpoints-btn" class="btn btn-outline-secondary">
+                                            <i class="fas fa-exchange-alt me-2"></i> Test Specific Endpoints
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Diagnostic Results -->
+    <div class="row mb-4" id="diagnostics-results-section" style="display: none;">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i> Diagnostic Results</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs mb-3" id="diagnosticTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab" aria-controls="summary" aria-selected="true">
+                                <i class="fas fa-list-alt me-2"></i> Summary
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="endpoints-tab" data-bs-toggle="tab" data-bs-target="#endpoints" type="button" role="tab" aria-controls="endpoints" aria-selected="false">
+                                <i class="fas fa-server me-2"></i> Endpoints
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="network-tab" data-bs-toggle="tab" data-bs-target="#network" type="button" role="tab" aria-controls="network" aria-selected="false">
+                                <i class="fas fa-network-wired me-2"></i> Network
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="raw-tab" data-bs-toggle="tab" data-bs-target="#raw" type="button" role="tab" aria-controls="raw" aria-selected="false">
+                                <i class="fas fa-code me-2"></i> Raw Data
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="diagnosticTabContent">
+                        <!-- Summary Tab -->
+                        <div class="tab-pane fade show active" id="summary" role="tabpanel" aria-labelledby="summary-tab">
+                            <div class="mb-4">
+                                <h6>Diagnostic Overview</h6>
+                                <div id="diagnostic-result-status" class="alert alert-info">
+                                    <div class="d-flex">
+                                        <div class="me-3">
+                                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="alert-heading">Running diagnostics...</h5>
+                                            <p class="mb-0">This may take a few moments while we check all API endpoints.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-4">
+                                    <h6>Issues Detected</h6>
+                                    <div id="diagnostic-issues" class="list-group">
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-center py-3">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-4">
+                                    <h6>Suggested Actions</h6>
+                                    <div id="diagnostic-suggestions" class="list-group">
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-center py-3">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Endpoints Tab -->
+                        <div class="tab-pane fade" id="endpoints" role="tabpanel" aria-labelledby="endpoints-tab">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Endpoint</th>
+                                            <th>URL</th>
+                                            <th>Status</th>
+                                            <th>Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="endpoints-table-body">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-3">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Network Tab -->
+                        <div class="tab-pane fade" id="network" role="tabpanel" aria-labelledby="network-tab">
+                            <div class="row">
+                                <div class="col-md-6 mb-4">
+                                    <h6>Network Connectivity</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Host</th>
+                                                    <th>DNS Resolution</th>
+                                                    <th>SSL Connection</th>
+                                                    <th>HTTP Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="network-table-body">
+                                                <tr>
+                                                    <td colspan="4" class="text-center py-3">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">Loading...</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-4">
+                                    <h6>Connection Logs</h6>
+                                    <div class="card bg-dark">
+                                        <div class="card-body">
+                                            <pre id="connection-logs" class="text-light mb-0" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">Running connectivity tests...</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Raw Data Tab -->
+                        <div class="tab-pane fade" id="raw" role="tabpanel" aria-labelledby="raw-tab">
+                            <div class="card bg-dark mb-3">
+                                <div class="card-body">
+                                    <pre id="raw-results" class="text-light mb-0" style="white-space: pre-wrap; max-height: 500px; overflow-y: auto;">Waiting for diagnostics to complete...</pre>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button id="copy-raw-data" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-copy me-2"></i> Copy to Clipboard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Troubleshooting Guide -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-life-ring me-2"></i> Troubleshooting Guide</h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="troubleshootingAccordion">
+                        <!-- Authentication Issues -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingAuth">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAuth" aria-expanded="false" aria-controls="collapseAuth">
+                                    <i class="fas fa-key me-2"></i> Authentication Issues
+                                </button>
+                            </h2>
+                            <div id="collapseAuth" class="accordion-collapse collapse" aria-labelledby="headingAuth" data-bs-parent="#troubleshootingAccordion">
+                                <div class="accordion-body">
+                                    <h6 class="fw-bold">Common Authentication Problems</h6>
+                                    <ul>
+                                        <li><strong>Invalid API Keys</strong> - Ensure your API key and secret are copied correctly from your broker's dashboard</li>
+                                        <li><strong>Expired Tokens</strong> - OAuth tokens may expire and need to be refreshed</li>
+                                        <li><strong>Incorrect Environment</strong> - Make sure you're using the right keys for paper vs. live trading</li>
+                                        <li><strong>Account Restrictions</strong> - Your account may have restrictions or need additional verification</li>
+                                    </ul>
+                                    
+                                    <div class="mt-3">
+                                        <h6 class="fw-bold">Provider-Specific Authentication</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Provider</th>
+                                                        <th>Authentication Method</th>
+                                                        <th>Where to Get Keys</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>Alpaca</td>
+                                                        <td>API Key + Secret</td>
+                                                        <td><a href="https://app.alpaca.markets/paper/dashboard/overview" target="_blank">Alpaca Dashboard</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>TD Ameritrade</td>
+                                                        <td>OAuth2</td>
+                                                        <td><a href="https://developer.tdameritrade.com/apis" target="_blank">TD Ameritrade Developer</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Charles Schwab</td>
+                                                        <td>OAuth2</td>
+                                                        <td><a href="https://developer.schwab.com/get-started" target="_blank">Schwab Developer Portal</a></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Connection Issues -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingConnection">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseConnection" aria-expanded="false" aria-controls="collapseConnection">
+                                    <i class="fas fa-wifi me-2"></i> Connection Issues
+                                </button>
+                            </h2>
+                            <div id="collapseConnection" class="accordion-collapse collapse" aria-labelledby="headingConnection" data-bs-parent="#troubleshootingAccordion">
+                                <div class="accordion-body">
+                                    <h6 class="fw-bold">Network Connectivity Troubleshooting</h6>
+                                    <ul>
+                                        <li><strong>DNS Resolution</strong> - If you can't resolve hostnames, check your DNS settings or try using IP addresses</li>
+                                        <li><strong>SSL/TLS Errors</strong> - Certificate validation issues may indicate a misconfigured system or security software</li>
+                                        <li><strong>Firewalls/Proxy</strong> - Your network may be blocking financial API connections</li>
+                                        <li><strong>API Downtime</strong> - Check broker status pages for any reported outages</li>
+                                    </ul>
+                                    
+                                    <div class="alert alert-info mt-3">
+                                        <i class="fas fa-info-circle me-2"></i> 
+                                        You can use the "Test Specific Endpoints" feature to isolate which particular API services are causing issues.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Rate Limits -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingRateLimit">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRateLimit" aria-expanded="false" aria-controls="collapseRateLimit">
+                                    <i class="fas fa-tachometer-alt me-2"></i> Rate Limits & Performance
+                                </button>
+                            </h2>
+                            <div id="collapseRateLimit" class="accordion-collapse collapse" aria-labelledby="headingRateLimit" data-bs-parent="#troubleshootingAccordion">
+                                <div class="accordion-body">
+                                    <h6 class="fw-bold">Rate Limit Information</h6>
+                                    <p>Each broker has different API rate limits:</p>
+                                    
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Provider</th>
+                                                    <th>Rate Limit</th>
+                                                    <th>Reset Period</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Alpaca</td>
+                                                    <td>200 requests/minute</td>
+                                                    <td>Minute</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>TD Ameritrade</td>
+                                                    <td>120 requests/minute</td>
+                                                    <td>Minute</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Charles Schwab</td>
+                                                    <td>Varies by endpoint</td>
+                                                    <td>Varies</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <h6 class="fw-bold mt-4">Optimization Tips</h6>
+                                    <ul>
+                                        <li>Cache data when possible to reduce API calls</li>
+                                        <li>Implement exponential backoff for retries</li>
+                                        <li>Use websocket connections for real-time data instead of polling</li>
+                                        <li>Batch requests when the API supports it</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Simulation Mode -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingSimulation">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSimulation" aria-expanded="false" aria-controls="collapseSimulation">
+                                    <i class="fas fa-vial me-2"></i> Using Simulation Mode
+                                </button>
+                            </h2>
+                            <div id="collapseSimulation" class="accordion-collapse collapse" aria-labelledby="headingSimulation" data-bs-parent="#troubleshootingAccordion">
+                                <div class="accordion-body">
+                                    <h6 class="fw-bold">About Simulation Mode</h6>
+                                    <p>
+                                        Simulation mode allows you to use the trading bot without a live API connection.
+                                        This is useful for:
+                                    </p>
+                                    <ul>
+                                        <li>Testing the interface without real API credentials</li>
+                                        <li>Developing and testing new strategies</li>
+                                        <li>Learning how the platform works without risk</li>
+                                        <li>Using the bot during API outages</li>
+                                    </ul>
+                                    
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>Important:</strong> Simulation mode uses randomly generated data and does not reflect real market conditions or account balances.
+                                    </div>
+                                    
+                                    <h6 class="fw-bold mt-3">Enabling Simulation Mode</h6>
+                                    <p>
+                                        To enable simulation mode, go to <a href="{{ url_for('settings') }}">Settings</a> and check the "Force Simulation Mode" option.
+                                        This will bypass all API connection attempts and use simulated data.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Endpoints Modal -->
+<div class="modal fade" id="testEndpointsModal" tabindex="-1" aria-labelledby="testEndpointsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testEndpointsModalLabel">Test Specific API Endpoints</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="endpoint-provider" class="form-label">API Provider</label>
+                    <select class="form-select" id="endpoint-provider">
+                        <option value="alpaca" {% if settings.api_provider == 'alpaca' %}selected{% endif %}>Alpaca</option>
+                        <option value="td_ameritrade" {% if settings.api_provider == 'td_ameritrade' %}selected{% endif %}>TD Ameritrade</option>
+                        <option value="schwab" {% if settings.api_provider == 'schwab' %}selected{% endif %}>Charles Schwab</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="endpoint-base-url" class="form-label">Base URL</label>
+                    <div class="input-group">
+                        <span class="input-group-text">https://</span>
+                        <input type="text" class="form-control" id="endpoint-base-url" value="paper-api.alpaca.markets">
+                    </div>
+                    <div class="form-text">
+                        Provider-specific base URLs will be suggested automatically
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="endpoint-paths" class="form-label">Select Endpoints to Test</label>
+                    <div id="endpoint-checkbox-container" class="mb-2">
+                        <!-- Dynamically populated based on selected provider -->
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span class="text-muted">Loading endpoints...</span>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Endpoint tests will be performed with your current API credentials from settings.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="run-endpoint-tests-btn">
+                    <i class="fas fa-play me-2"></i> Run Tests
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize variables
+    const providerEndpoints = {
+        'alpaca': {
+            base_urls: ['paper-api.alpaca.markets', 'api.alpaca.markets', 'data.alpaca.markets'],
+            endpoints: {
+                'account': '/v2/account',
+                'assets': '/v2/assets',
+                'orders': '/v2/orders',
+                'positions': '/v2/positions',
+                'clock': '/v2/clock',
+                'calendar': '/v2/calendar'
+            }
+        },
+        'td_ameritrade': {
+            base_urls: ['api.tdameritrade.com', 'auth.tdameritrade.com'],
+            endpoints: {
+                'accounts': '/v1/accounts',
+                'instruments': '/v1/instruments',
+                'market_hours': '/v1/marketdata/hours',
+                'price_history': '/v1/marketdata/AAPL/pricehistory',
+                'quotes': '/v1/marketdata/quotes'
+            }
+        },
+        'schwab': {
+            base_urls: ['api.schwab.com', 'api.schwabapi.com', 'sandbox.schwabapi.com'],
+            endpoints: {
+                'oauth': '/v1/oauth/authorize',
+                'token': '/v1/oauth/token',
+                'accounts': '/v1/accounts',
+                'orders': '/v1/accounts/test-account/orders',
+                'positions': '/v1/accounts/test-account/positions',
+                'marketdata': '/v1/marketdata'
+            }
+        }
+    };
+
+    let diagResults = null;
+    
+    // Run basic connection test on page load
+    runBasicConnectionTest();
+    
+    // Function to run a basic connection test
+    function runBasicConnectionTest() {
+        updateConnectionStatus('testing', 'Testing connection...', 'Please wait while we check your API connection.');
+        
+        // Get current provider and settings
+        const provider = document.getElementById('provider-display').textContent.toLowerCase();
+        const isPaperTrading = document.getElementById('environment-display').textContent.trim() === 'Paper Trading';
+        
+        fetch('/api/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                provider: provider,
+                is_paper_trading: isPaperTrading
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Update the connection status based on the result
+            if (data.success) {
+                updateConnectionStatus('success', 'Connected', data.message);
+            } else {
+                updateConnectionStatus('error', 'Connection Failed', data.message);
+            }
+            
+            // Store minimal results data
+            diagResults = {
+                basic: data
+            };
+            
+            // Update the last tested time
+            document.getElementById('last-tested').innerHTML = 
+                `<span class="badge ${data.success ? 'bg-success' : 'bg-danger'}">
+                    ${new Date().toLocaleTimeString()}
+                </span>`;
+        })
+        .catch(error => {
+            console.error('Error testing connection:', error);
+            updateConnectionStatus('error', 'Connection Error', 'An error occurred while testing the connection.');
+        });
+    }
+    
+    // Function to update the connection status display
+    function updateConnectionStatus(status, title, message) {
+        const statusIcon = document.getElementById('connection-status-icon');
+        const statusTitle = document.getElementById('connection-status-title');
+        const statusMessage = document.getElementById('connection-status-message');
+        const progressBar = document.getElementById('connection-progress');
+        
+        // Update the status icon
+        statusIcon.innerHTML = '';
+        let icon;
+        
+        switch (status) {
+            case 'success':
+                icon = document.createElement('i');
+                icon.className = 'fas fa-check-circle fa-2x text-success';
+                progressBar.style.width = '100%';
+                progressBar.className = 'progress-bar bg-success';
+                break;
+            case 'error':
+                icon = document.createElement('i');
+                icon.className = 'fas fa-times-circle fa-2x text-danger';
+                progressBar.style.width = '100%';
+                progressBar.className = 'progress-bar bg-danger';
+                break;
+            case 'warning':
+                icon = document.createElement('i');
+                icon.className = 'fas fa-exclamation-triangle fa-2x text-warning';
+                progressBar.style.width = '100%';
+                progressBar.className = 'progress-bar bg-warning';
+                break;
+            case 'testing':
+            default:
+                icon = document.createElement('i');
+                icon.className = 'fas fa-circle-notch fa-spin fa-2x text-primary';
+                progressBar.style.width = '25%';
+                progressBar.className = 'progress-bar bg-primary progress-bar-striped progress-bar-animated';
+                break;
+        }
+        
+        statusIcon.appendChild(icon);
+        statusTitle.textContent = title;
+        statusMessage.textContent = message;
+    }
+    
+    // Function to run advanced diagnostics
+    document.getElementById('run-diagnostics-btn').addEventListener('click', function() {
+        // Show the diagnostics results section
+        document.getElementById('diagnostics-results-section').style.display = 'block';
+        
+        // Scroll to the results section
+        document.getElementById('diagnostics-results-section').scrollIntoView({ behavior: 'smooth' });
+        
+        // Update UI to show diagnostics are running
+        document.getElementById('diagnostic-result-status').innerHTML = `
+            <div class="d-flex">
+                <div class="me-3">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading">Running advanced diagnostics...</h5>
+                    <p class="mb-0">This may take up to 30 seconds while we check all API endpoints and network connectivity.</p>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('diagnostic-issues').innerHTML = `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('diagnostic-suggestions').innerHTML = `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('endpoints-table-body').innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        document.getElementById('network-table-body').innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        document.getElementById('connection-logs').textContent = 'Running connectivity tests...';
+        document.getElementById('raw-results').textContent = 'Waiting for diagnostics to complete...';
+        
+        // Get current provider and settings
+        const provider = document.getElementById('provider-display').textContent.toLowerCase();
+        const isPaperTrading = document.getElementById('environment-display').textContent.trim() === 'Paper Trading';
+        
+        // Run the diagnostics
+        fetch('/api/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                provider: provider,
+                is_paper_trading: isPaperTrading,
+                run_detailed_diagnostics: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Store the results
+            diagResults = data;
+            
+            // Update the diagnostic status
+            updateDiagnosticResults(data);
+        })
+        .catch(error => {
+            console.error('Error running diagnostics:', error);
+            document.getElementById('diagnostic-result-status').innerHTML = `
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-times-circle fa-2x text-danger"></i>
+                    </div>
+                    <div>
+                        <h5 class="alert-heading">Diagnostics Failed</h5>
+                        <p class="mb-0">An error occurred while running the diagnostics: ${error.message}</p>
+                    </div>
+                </div>
+            `;
+        });
+    });
+    
+    // Function to update the diagnostic results
+    function updateDiagnosticResults(data) {
+        const diagnosticResults = data.diagnostic_results || {};
+        
+        // Update the diagnostic status
+        let statusClass, statusIcon, statusTitle, statusMessage;
+        
+        if (data.success) {
+            if (data.status === 'partial') {
+                statusClass = 'alert-warning';
+                statusIcon = 'fas fa-exclamation-triangle text-warning';
+                statusTitle = 'Partially Connected';
+                statusMessage = 'Your API connection is partially working. Some endpoints were accessible, but others had issues.';
+            } else {
+                statusClass = 'alert-success';
+                statusIcon = 'fas fa-check-circle text-success';
+                statusTitle = 'Connected';
+                statusMessage = 'Your API connection is working properly. All tested endpoints were accessible.';
+            }
+        } else {
+            statusClass = 'alert-danger';
+            statusIcon = 'fas fa-times-circle text-danger';
+            statusTitle = 'Connection Failed';
+            statusMessage = 'Your API connection is not working. Please review the diagnostics below.';
+        }
+        
+        document.getElementById('diagnostic-result-status').className = `alert ${statusClass}`;
+        document.getElementById('diagnostic-result-status').innerHTML = `
+            <div class="d-flex">
+                <div class="me-3">
+                    <i class="${statusIcon} fa-2x"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading">${statusTitle}</h5>
+                    <p class="mb-0">${statusMessage}</p>
+                </div>
+            </div>
+        `;
+        
+        // Update the issues list
+        let issuesHtml = '';
+        
+        if (diagnosticResults.errors && diagnosticResults.errors.length > 0) {
+            diagnosticResults.errors.forEach(error => {
+                issuesHtml += `
+                    <div class="list-group-item list-group-item-danger">
+                        <div class="d-flex w-100">
+                            <div class="me-3">
+                                <i class="fas fa-times-circle text-danger"></i>
+                            </div>
+                            <div>
+                                <strong>Error:</strong> ${error}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        if (diagnosticResults.warnings && diagnosticResults.warnings.length > 0) {
+            diagnosticResults.warnings.forEach(warning => {
+                issuesHtml += `
+                    <div class="list-group-item list-group-item-warning">
+                        <div class="d-flex w-100">
+                            <div class="me-3">
+                                <i class="fas fa-exclamation-triangle text-warning"></i>
+                            </div>
+                            <div>
+                                <strong>Warning:</strong> ${warning}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        if (issuesHtml === '') {
+            issuesHtml = `
+                <div class="list-group-item list-group-item-success">
+                    <div class="d-flex w-100">
+                        <div class="me-3">
+                            <i class="fas fa-check-circle text-success"></i>
+                        </div>
+                        <div>
+                            <strong>No issues detected.</strong> Your API connection appears to be working properly.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        document.getElementById('diagnostic-issues').innerHTML = issuesHtml;
+        
+        // Update the suggestions list
+        let suggestionsHtml = '';
+        
+        if (data.all_suggestions && data.all_suggestions.length > 0) {
+            data.all_suggestions.forEach(suggestion => {
+                suggestionsHtml += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100">
+                            <div class="me-3">
+                                <i class="fas fa-lightbulb text-warning"></i>
+                            </div>
+                            <div>
+                                ${suggestion}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            suggestionsHtml = `
+                <div class="list-group-item">
+                    <div class="d-flex w-100">
+                        <div class="me-3">
+                            <i class="fas fa-info-circle text-info"></i>
+                        </div>
+                        <div>
+                            No specific suggestions available. Your connection appears to be working correctly.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        document.getElementById('diagnostic-suggestions').innerHTML = suggestionsHtml;
+        
+        // Update the endpoints table
+        let endpointsHtml = '';
+        
+        if (diagnosticResults.endpoints_tested && diagnosticResults.endpoints_tested.length > 0) {
+            diagnosticResults.endpoints_tested.forEach(endpoint => {
+                const statusClass = endpoint.success ? 'text-success' : 'text-danger';
+                const statusIcon = endpoint.success ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                const statusText = endpoint.status === 'error' ? 'Error' : endpoint.status;
+                
+                endpointsHtml += `
+                    <tr>
+                        <td>${endpoint.name || 'N/A'}</td>
+                        <td><code>${endpoint.url || 'N/A'}</code></td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
+                        <td><i class="${statusIcon} ${statusClass}"></i> ${endpoint.success ? 'Success' : 'Failed'}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            endpointsHtml = `
+                <tr>
+                    <td colspan="4" class="text-center">No endpoint tests were performed.</td>
+                </tr>
+            `;
+        }
+        
+        document.getElementById('endpoints-table-body').innerHTML = endpointsHtml;
+        
+        // Update the network table
+        let networkHtml = '';
+        
+        if (diagnosticResults.network_info) {
+            for (const [host, info] of Object.entries(diagnosticResults.network_info)) {
+                const dnsClass = info.dns_resolution ? 'text-success' : 'text-danger';
+                const dnsIcon = info.dns_resolution ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                const dnsText = info.dns_resolution ? 'Success' : 'Failed';
+                
+                const sslClass = info.ssl_connection ? 'text-success' : 'text-danger';
+                const sslIcon = info.ssl_connection ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                const sslText = info.ssl_connection ? 'Success' : 'Failed';
+                
+                let httpClass, httpIcon, httpText;
+                
+                if (info.http_status) {
+                    if (info.http_status >= 200 && info.http_status < 300) {
+                        httpClass = 'text-success';
+                        httpIcon = 'fas fa-check-circle';
+                        httpText = info.http_status;
+                    } else {
+                        httpClass = 'text-warning';
+                        httpIcon = 'fas fa-exclamation-circle';
+                        httpText = info.http_status;
+                    }
+                } else {
+                    httpClass = 'text-danger';
+                    httpIcon = 'fas fa-times-circle';
+                    httpText = 'Failed';
+                }
+                
+                networkHtml += `
+                    <tr>
+                        <td>${host}</td>
+                        <td><i class="${dnsIcon} ${dnsClass}"></i> ${dnsText}</td>
+                        <td><i class="${sslIcon} ${sslClass}"></i> ${sslText}</td>
+                        <td><i class="${httpIcon} ${httpClass}"></i> ${httpText}</td>
+                    </tr>
+                `;
+            }
+        }
+        
+        if (networkHtml === '') {
+            networkHtml = `
+                <tr>
+                    <td colspan="4" class="text-center">No network tests were performed.</td>
+                </tr>
+            `;
+        }
+        
+        document.getElementById('network-table-body').innerHTML = networkHtml;
+        
+        // Update the connection logs
+        let logsHtml = '';
+        
+        if (diagnosticResults.info && diagnosticResults.info.length > 0) {
+            diagnosticResults.info.forEach(log => {
+                logsHtml += `[INFO] ${log}\n`;
+            });
+        }
+        
+        if (diagnosticResults.warnings && diagnosticResults.warnings.length > 0) {
+            diagnosticResults.warnings.forEach(log => {
+                logsHtml += `[WARN] ${log}\n`;
+            });
+        }
+        
+        if (diagnosticResults.errors && diagnosticResults.errors.length > 0) {
+            diagnosticResults.errors.forEach(log => {
+                logsHtml += `[ERROR] ${log}\n`;
+            });
+        }
+        
+        if (logsHtml === '') {
+            logsHtml = 'No connection logs available.';
+        }
+        
+        document.getElementById('connection-logs').textContent = logsHtml;
+        
+        // Update the raw results
+        document.getElementById('raw-results').textContent = JSON.stringify(data, null, 2);
+    }
+    
+    // Function to handle endpoint provider selection
+    document.getElementById('endpoint-provider').addEventListener('change', function() {
+        const provider = this.value;
+        const baseUrlInput = document.getElementById('endpoint-base-url');
+        const providerData = providerEndpoints[provider];
+        
+        // Update base URL field with default for selected provider
+        if (providerData && providerData.base_urls.length > 0) {
+            baseUrlInput.value = providerData.base_urls[0];
+        }
+        
+        // Update endpoint checkboxes
+        updateEndpointCheckboxes(provider);
+    });
+    
+    // Function to update endpoint checkboxes based on selected provider
+    function updateEndpointCheckboxes(provider) {
+        const container = document.getElementById('endpoint-checkbox-container');
+        const providerData = providerEndpoints[provider];
+        
+        if (!providerData || !providerData.endpoints) {
+            container.innerHTML = '<div class="alert alert-warning">No endpoints available for this provider.</div>';
+            return;
+        }
+        
+        let html = '';
+        
+        for (const [name, path] of Object.entries(providerData.endpoints)) {
+            html += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${path}" id="endpoint-${name}" checked>
+                    <label class="form-check-label" for="endpoint-${name}">
+                        ${name} <small class="text-muted">${path}</small>
+                    </label>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    // Initialize endpoint checkboxes
+    updateEndpointCheckboxes(document.getElementById('endpoint-provider').value);
+    
+    // Handle the Endpoint Testing Modal
+    document.getElementById('test-endpoints-btn').addEventListener('click', function() {
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('testEndpointsModal'));
+        modal.show();
+    });
+    
+    // Handle the Run Endpoint Tests button
+    document.getElementById('run-endpoint-tests-btn').addEventListener('click', function() {
+        // Get the selected provider and base URL
+        const provider = document.getElementById('endpoint-provider').value;
+        const baseUrl = document.getElementById('endpoint-base-url').value;
+        
+        // Get the selected endpoints
+        const selectedEndpoints = [];
+        const checkboxes = document.querySelectorAll('#endpoint-checkbox-container input[type="checkbox"]:checked');
+        
+        checkboxes.forEach(checkbox => {
+            selectedEndpoints.push(checkbox.value);
+        });
+        
+        if (selectedEndpoints.length === 0) {
+            alert('Please select at least one endpoint to test.');
+            return;
+        }
+        
+        // Close the modal
+        bootstrap.Modal.getInstance(document.getElementById('testEndpointsModal')).hide();
+        
+        // Show the diagnostics results section
+        document.getElementById('diagnostics-results-section').style.display = 'block';
+        
+        // Scroll to the results section
+        document.getElementById('diagnostics-results-section').scrollIntoView({ behavior: 'smooth' });
+        
+        // Show testing status
+        document.getElementById('diagnostic-result-status').innerHTML = `
+            <div class="d-flex">
+                <div class="me-3">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading">Testing specific endpoints...</h5>
+                    <p class="mb-0">Testing ${selectedEndpoints.length} endpoints on ${baseUrl}</p>
+                </div>
+            </div>
+        `;
+        
+        // Set the active tab to endpoints
+        document.getElementById('endpoints-tab').click();
+        
+        // Show loading indicator in the endpoints table
+        document.getElementById('endpoints-table-body').innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        // Run the endpoint tests
+        // TODO: This would connect to a backend endpoint to test each specific endpoint
+        // For now, we'll simulate the tests with random success/failure
+        
+        setTimeout(() => {
+            // Simulate endpoint test results
+            const results = {
+                success: true,
+                endpoints: []
+            };
+            
+            let successCount = 0;
+            
+            selectedEndpoints.forEach(endpoint => {
+                // Simulate some failures
+                const success = Math.random() > 0.3;
+                const status = success ? 200 : (Math.random() > 0.5 ? 401 : 404);
+                
+                if (success) successCount++;
+                
+                results.endpoints.push({
+                    name: endpoint.split('/').pop() || endpoint,
+                    url: `https://${baseUrl}${endpoint}`,
+                    status: status,
+                    success: success
+                });
+            });
+            
+            results.success = successCount > 0;
+            
+            // Display the results
+            displayEndpointTestResults(results);
+        }, 2000);
+    });
+    
+    // Function to display endpoint test results
+    function displayEndpointTestResults(results) {
+        // Update the status
+        let statusClass, statusIcon, statusTitle, statusMessage;
+        
+        if (results.success) {
+            if (results.endpoints.some(e => !e.success)) {
+                statusClass = 'alert-warning';
+                statusIcon = 'fas fa-exclamation-triangle text-warning';
+                statusTitle = 'Some Endpoints Failed';
+                statusMessage = `${results.endpoints.filter(e => e.success).length} of ${results.endpoints.length} endpoints were accessible.`;
+            } else {
+                statusClass = 'alert-success';
+                statusIcon = 'fas fa-check-circle text-success';
+                statusTitle = 'All Endpoints Accessible';
+                statusMessage = `All ${results.endpoints.length} tested endpoints returned successful responses.`;
+            }
+        } else {
+            statusClass = 'alert-danger';
+            statusIcon = 'fas fa-times-circle text-danger';
+            statusTitle = 'All Endpoints Failed';
+            statusMessage = `None of the ${results.endpoints.length} tested endpoints were accessible.`;
+        }
+        
+        document.getElementById('diagnostic-result-status').className = `alert ${statusClass}`;
+        document.getElementById('diagnostic-result-status').innerHTML = `
+            <div class="d-flex">
+                <div class="me-3">
+                    <i class="${statusIcon} fa-2x"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading">${statusTitle}</h5>
+                    <p class="mb-0">${statusMessage}</p>
+                </div>
+            </div>
+        `;
+        
+        // Update the endpoints table
+        let endpointsHtml = '';
+        
+        results.endpoints.forEach(endpoint => {
+            const statusClass = endpoint.success ? 'text-success' : 'text-danger';
+            const statusIcon = endpoint.success ? 'fas fa-check-circle' : 'fas fa-times-circle';
+            
+            endpointsHtml += `
+                <tr>
+                    <td>${endpoint.name}</td>
+                    <td><code>${endpoint.url}</code></td>
+                    <td><span class="${statusClass}">${endpoint.status}</span></td>
+                    <td><i class="${statusIcon} ${statusClass}"></i> ${endpoint.success ? 'Success' : 'Failed'}</td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('endpoints-table-body').innerHTML = endpointsHtml;
+    }
+    
+    // Handle copy to clipboard functionality
+    document.getElementById('copy-raw-data').addEventListener('click', function() {
+        const rawData = document.getElementById('raw-results').textContent;
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(rawData)
+                .then(() => {
+                    this.innerHTML = '<i class="fas fa-check me-2"></i> Copied!';
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-copy me-2"></i> Copy to Clipboard';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy text:', err);
+                    this.innerHTML = '<i class="fas fa-times me-2"></i> Failed to copy';
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-copy me-2"></i> Copy to Clipboard';
+                    }, 2000);
+                });
+        } else {
+            // Fallback for browsers that don't support the clipboard API
+            const textarea = document.createElement('textarea');
+            textarea.value = rawData;
+            textarea.style.position = 'fixed';  // Avoid scrolling to bottom
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    this.innerHTML = '<i class="fas fa-check me-2"></i> Copied!';
+                } else {
+                    this.innerHTML = '<i class="fas fa-times me-2"></i> Failed to copy';
+                }
+            } catch (err) {
+                console.error('Failed to copy text:', err);
+                this.innerHTML = '<i class="fas fa-times me-2"></i> Failed to copy';
+            }
+            
+            document.body.removeChild(textarea);
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-copy me-2"></i> Copy to Clipboard';
+            }, 2000);
+        }
+    });
+});
+</script>
+{% endblock %}
