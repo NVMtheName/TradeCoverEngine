@@ -10,7 +10,8 @@ from the server-side to avoid CORS restrictions in the browser.
 import os
 import logging
 import requests
-from flask import Blueprint, request, jsonify, current_app, session, redirect
+from datetime import datetime
+from flask import Blueprint, request, jsonify, current_app, session, redirect, url_for, flash
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -55,8 +56,35 @@ def proxy_oauth_authorize():
             redirect_url = response.headers.get('Location')
             logger.info(f"Received redirect to: {redirect_url}")
             
-            # Instead of returning JSON, directly redirect the browser to the Schwab URL
-            # This handles the Schwab gateway UI flow properly
+            # Check if it's a Schwab gateway redirect
+            if redirect_url and 'sws-gateway.schwab.com' in redirect_url:
+                logger.info("Processing Schwab gateway redirect")
+                
+                # Store the full gateway URL for diagnostic purposes
+                session['oauth_gateway_url'] = redirect_url
+                
+                # Extract the important parts for diagnostics
+                session['oauth_diagnostics'] = {
+                    'status_code': response.status_code,
+                    'target_url': redirect_url,
+                    'environment': 'Production' if not session.get('oauth_is_sandbox') else 'Sandbox',
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'message': 'Schwab Gateway Connection Required',
+                    'correlationId': request.args.get('correlationId', 'Not provided')
+                }
+                
+                # Redirect to settings page with helpful error
+                flash("Connection to Schwab Gateway is not available from the development environment. " +
+                      "This would normally redirect to the Schwab login page. " +
+                      "For production deployment, ensure your domain is whitelisted with Schwab.", "warning")
+                
+                # Provide diagnostic information
+                flash("Technical details: The Schwab API is attempting to redirect to their gateway UI for authentication, " +
+                      "but this may be blocked in development environments or require domain whitelisting.", "info")
+                
+                return redirect(url_for('settings'))
+            
+            # For other redirects, follow them directly
             return redirect(redirect_url)
         
         # For other responses, pass through status code and content
