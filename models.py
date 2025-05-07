@@ -58,6 +58,11 @@ class Settings(db.Model):
     forex_lot_size = db.Column(db.Float, default=0.1)  # Default lot size for forex trades (mini lot)
     forex_pairs_watchlist = db.Column(db.String(255), default='EUR/USD,GBP/USD,USD/JPY')  # Watchlist of forex pairs
     
+    # AI advisor settings
+    openai_api_key = db.Column(db.String(255))  # OpenAI API key for AI features
+    enable_ai_advisor = db.Column(db.Boolean, default=True)  # Whether AI advisor is enabled
+    ai_model_selection = db.Column(db.String(50), default='auto')  # How to select models (auto, ensemble, cost_effective, premium)
+    
     # Last updated timestamp
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     

@@ -77,15 +77,23 @@ class AIAdvisor:
     and trading recommendations with model ensemble techniques.
     """
     
-    def __init__(self):
+    def __init__(self, custom_api_key=None, model_selection_strategy='auto'):
         """
         Initialize the AI advisor with OpenAI client and multiple model support.
+        
+        Args:
+            custom_api_key: Optional custom API key to use instead of environment variable
+            model_selection_strategy: Strategy for model selection ('auto', 'ensemble', 'cost_effective', 'premium')
         """
         try:
-            self.api_key = os.environ.get("OPENAI_API_KEY")
+            # Try custom key first, then environment variable
+            self.api_key = custom_api_key or os.environ.get("OPENAI_API_KEY")
+            self.model_selection_strategy = model_selection_strategy
+            
             if not self.api_key:
                 logger.warning("OpenAI API key not found. AI advisor will not be available.")
                 self.client = None
+                self.available_models = []
             else:
                 self.client = OpenAI(api_key=self.api_key)
                 
@@ -101,10 +109,43 @@ class AIAdvisor:
                 self.cache_ttl = 1800  # 30 minutes cache lifetime
                 
                 logger.info(f"AI advisor initialized with {len(self.available_models)} available models.")
+                
+                # Apply model selection strategy
+                self._apply_model_selection_strategy()
         except Exception as e:
             logger.error(f"Error initializing AI advisor: {str(e)}")
             self.client = None
             self.available_models = []
+            
+    def _apply_model_selection_strategy(self):
+        """Apply the selected model selection strategy"""
+        if not self.is_available():
+            return
+            
+        # No need to apply strategy if we only have one model
+        if len(self.available_models) <= 1:
+            return
+            
+        logger.info(f"Applying model selection strategy: {self.model_selection_strategy}")
+        
+        if self.model_selection_strategy == 'cost_effective':
+            # Prioritize GPT-3.5-turbo for most tasks
+            if 'gpt-3.5-turbo' in self.available_models:
+                for task in AIModelConfig.TASK_MODEL_MAPPING:
+                    AIModelConfig.TASK_MODEL_MAPPING[task] = 'gpt-3.5-turbo'
+                logger.info("Applied cost-effective strategy: Using GPT-3.5-turbo for all tasks")
+        
+        elif self.model_selection_strategy == 'premium':
+            # Prioritize GPT-4o for most tasks
+            if 'gpt-4o' in self.available_models:
+                for task in AIModelConfig.TASK_MODEL_MAPPING:
+                    AIModelConfig.TASK_MODEL_MAPPING[task] = 'gpt-4o'
+                logger.info("Applied premium strategy: Using GPT-4o for all tasks")
+                
+        elif self.model_selection_strategy == 'ensemble':
+            # Use ensemble approach for all tasks that support it
+            # (No changes needed, as analyze_stock() already uses ensemble if more than one model is available)
+            logger.info("Applied ensemble strategy: Will use multiple models when available")
     
     def _test_model_availability(self) -> List[str]:
         """Test which models are available with the current API key"""
