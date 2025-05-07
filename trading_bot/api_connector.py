@@ -90,89 +90,47 @@ class APIConnector:
         
     def _init_schwab(self):
         """Initialize Charles Schwab API settings."""
-        # Set base URLs according to Schwab Trader API documentation
-        # https://developer.schwab.com/products/trader-api--individual/details/documentation/Retail%20Trader%20API%20Production
-        # However, Schwab may have updated their API endpoints since documentation was published
-        # We'll try multiple potential OAuth endpoint URLs during the authentication flow
-        
-        # Set base API URL - this is likely still correct
-        if self.paper_trading:
-            # Sandbox environment
-            self.base_url = "https://api-sandbox.schwabapi.com/broker/rest/v1"
-            logger.info("Using Schwab sandbox API endpoints (v1)")
-            
-            # Define OAuth2 auth URLs based on our endpoint testing
-            self.oauth_auth_urls = [
-                # Primary working sandbox endpoint confirmed by our tests
-                "https://sandbox.schwabapi.com/v1/oauth/authorize",  # The ONLY working sandbox endpoint
-                
-                # Fallback options
-                "https://sandbox.schwabapi.com/oauth2/authorize",
-                "https://sandbox.schwabapi.com/oauth/authorize",
-                "https://api-sandbox.schwabapi.com/oauth/authorize"
-            ]
-            
-            # Define OAuth2 token URLs based on our endpoint testing
-            self.oauth_token_urls = [
-                # Primary working sandbox endpoint confirmed by our tests
-                "https://sandbox.schwabapi.com/v1/oauth/token",  # The ONLY working sandbox endpoint
-                
-                # Fallback options
-                "https://sandbox.schwabapi.com/oauth2/token",
-                "https://sandbox.schwabapi.com/oauth/token",
-                "https://api-sandbox.schwabapi.com/oauth/token"
-            ]
-            
-            # Set the primary URLs for initial access
-            self.oauth_auth_url = self.oauth_auth_urls[0]
-            self.oauth_token_url = self.oauth_token_urls[0]
-            
-        else:
-            # Production environment
-            self.base_url = "https://api.schwabapi.com/broker/rest/v1"
-            logger.info("Using Schwab production API endpoints (v1)")
-            
-            # Define OAuth2 auth URLs based on our endpoint testing
-            self.oauth_auth_urls = [
-                # Primary working endpoint confirmed by our tests
-                "https://api.schwabapi.com/v1/oauth/authorize",  # The ONLY working endpoint
-                
-                # Fallback options
-                "https://api.schwabapi.com/oauth2/authorize",
-                "https://api.schwabapi.com/oauth/authorize",
-                "https://api.schwab.com/v1/oauth/authorize",
-                "https://developer.schwab.com/oauth/authorize"
-            ]
-            
-            # Define OAuth2 token URLs based on our endpoint testing
-            self.oauth_token_urls = [
-                # Primary working endpoint confirmed by our tests
-                "https://api.schwabapi.com/v1/oauth/token",  # The ONLY working endpoint
-                
-                # Fallback options
-                "https://api.schwabapi.com/oauth2/token",
-                "https://api.schwabapi.com/oauth/token",
-                "https://api.schwab.com/v1/oauth/token",
-                "https://developer.schwab.com/oauth/token"
-            ]
-            
-            # Set the primary URLs for initial access
-            self.oauth_auth_url = self.oauth_auth_urls[0]
-            self.oauth_token_url = self.oauth_token_urls[0]
-            
-        # Set API headers (no authorization yet - will be added after OAuth flow)
-        self.headers = {
-            "Content-Type": "application/json"
-        }
+        # Import the specialized Schwab connector
+        from trading_bot.schwab_connector import SchwabConnector, create_connector_from_settings
         
         # Initialize OAuth credentials
         self.client_id = self.api_key  # Schwab uses client_id/client_secret terminology
         self.client_secret = self.api_secret
         
+        # Create a specialized Schwab connector
+        self.schwab_connector = SchwabConnector(
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            is_sandbox=self.paper_trading
+        )
+        
+        # Set up base URLs and endpoints for compatibility with existing code
+        if self.paper_trading:
+            # Sandbox environment
+            self.base_url = "https://sandbox.schwabapi.com/broker/rest/v1"
+            logger.info("Using Schwab sandbox API endpoints (v1)")
+            self.oauth_auth_url = "https://sandbox.schwabapi.com/v1/oauth/authorize"
+            self.oauth_token_url = "https://sandbox.schwabapi.com/v1/oauth/token"
+        else:
+            # Production environment
+            self.base_url = "https://api.schwabapi.com/broker/rest/v1"
+            logger.info("Using Schwab production API endpoints (v1)")
+            self.oauth_auth_url = "https://api.schwabapi.com/v1/oauth/authorize"
+            self.oauth_token_url = "https://api.schwabapi.com/v1/oauth/token"
+        
+        # Set API headers (no authorization yet - will be added after OAuth flow)
+        self.headers = {
+            "Content-Type": "application/json"
+        }
+        
         # Initialize token-related attributes
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
+        
+        # For compatibility with existing code, keep auth URL lists
+        self.oauth_auth_urls = [self.oauth_auth_url]
+        self.oauth_token_urls = [self.oauth_token_url]
         
         # Truncate for logging
         display_client_id = f"{self.client_id[:4]}...{self.client_id[-4:]}" if self.client_id and len(self.client_id) > 8 else "None"
@@ -377,7 +335,15 @@ class APIConnector:
                     return False
                     
             elif self.provider == 'schwab':
-                # For Schwab, we need to check if we have valid credentials first
+                # For Schwab, we'll use our specialized connector for improved reliability
+                
+                # First, sync tokens between our API connector and specialized Schwab connector
+                if self.access_token:
+                    self.schwab_connector.access_token = self.access_token
+                    self.schwab_connector.refresh_token = self.refresh_token
+                    self.schwab_connector.token_expiry = self.token_expiry
+                
+                # Check if we need to authenticate
                 if not self.access_token:
                     logger.warning("No access token available for Schwab API - OAuth2 authentication required")
                     logger.warning("To use the Schwab API, you need to register your application for OAuth2 access.")
@@ -390,55 +356,44 @@ class APIConnector:
                     logger.warning("Falling back to simulation mode")
                     self.force_simulation = True
                     return False
-                    
-                # Check if we can safely call token refresh methods
-                if hasattr(self, 'is_token_expired'):
-                    # Check if token has expired and try to refresh
-                    if self.is_token_expired():
-                        logger.info("Access token has expired, attempting to refresh")
-                        if hasattr(self, 'refresh_access_token') and self.refresh_access_token():
-                            logger.info("Successfully refreshed access token")
-                            return True
-                        else:
-                            logger.warning("Failed to refresh access token")
-                            return False
                 
-                # Test the API connection
+                # Use the specialized connector to check connection
                 try:
-                    # Use the accounts endpoint from Schwab Trader API documentation
-                    # https://developer.schwab.com/products/trader-api--individual/details/documentation/
-                    account_url = f"{self.base_url}/accounts"
-                    headers = self.headers.copy()
-                    headers['Authorization'] = f"Bearer {self.access_token}"
+                    logger.info("Using specialized Schwab connector to test connection")
+                    is_connected = self.schwab_connector.is_connected()
                     
-                    logger.info(f"Testing connection to Schwab API: {account_url}")
-                    response = self.session.get(account_url, headers=headers, timeout=10)
-                    
-                    logger.info(f"Test connection status: {response.status_code}")
-                    
-                    if response.status_code == 200:
+                    if is_connected:
                         logger.info("Successfully connected to Schwab API")
+                        
+                        # If token was refreshed in the specialized connector, sync it back
+                        if self.schwab_connector.access_token != self.access_token:
+                            logger.info("Synchronizing refreshed tokens from specialized connector")
+                            self.access_token = self.schwab_connector.access_token
+                            self.refresh_token = self.schwab_connector.refresh_token
+                            self.token_expiry = self.schwab_connector.token_expiry
+                            
+                            # Update session headers
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
+                            })
+                        
                         return True
-                    elif response.status_code == 401:
-                        # Try to refresh token if unauthorized
-                        logger.info("Unauthorized response, attempting to refresh token")
-                        if self.refresh_access_token():
-                            # Try again with new token
-                            return self._check_connection()
-                        else:
-                            logger.warning("Failed to refresh access token")
-                            return False
                     else:
-                        logger.warning(f"API connection failed with status code {response.status_code}: {response.text}")
+                        # Check diagnostic information
+                        diagnostic_info = self.schwab_connector.get_diagnostic_info()
+                        logger.warning(f"Schwab API connection failed: {diagnostic_info.get('connection_status')}")
+                        logger.warning(f"Last error: {diagnostic_info.get('last_error_message')}")
+                        
+                        if diagnostic_info.get('token_expired', True):
+                            logger.warning("Token appears to be expired")
+                        
                         return False
+                        
                 except Exception as e:
-                    logger.warning(f"HTTP request test failed: {str(e)}")
+                    logger.error(f"Error testing Schwab API connection: {str(e)}")
                     # Fall back to simulation mode
                     self.force_simulation = True
                     return False
-                
-                # If we have a valid token, assume we're connected
-                return True
                 
             else:
                 logger.error(f"Unsupported provider: {self.provider}")
@@ -521,59 +476,39 @@ class APIConnector:
                     return self._get_simulated_account_info()
                     
             elif self.provider == 'schwab':
-                # Check if we have a valid access token
-                if not self.access_token:
-                    logger.warning("No access token available for Schwab API")
+                # Use our specialized Schwab connector for improved reliability
+                if self.force_simulation:
+                    logger.info("Using simulation mode for Schwab account info")
                     return self._get_simulated_account_info()
                 
-                # Add authorization header
-                headers = self.headers.copy()
-                headers['Authorization'] = f"Bearer {self.access_token}"
+                # Sync tokens with specialized connector
+                if self.access_token:
+                    self.schwab_connector.access_token = self.access_token
+                    self.schwab_connector.refresh_token = self.refresh_token
+                    self.schwab_connector.token_expiry = self.token_expiry
                 
-                # Use the proper endpoint from Schwab Trader API documentation
-                # https://developer.schwab.com/products/trader-api--individual/details/documentation/
                 try:
-                    logger.info("Retrieving account information from Schwab API")
-                    accounts_url = f"{self.base_url}/accounts"
-                    response = self.session.get(accounts_url, headers=headers, timeout=10)
+                    logger.info("Retrieving account information using specialized Schwab connector")
+                    accounts = self.schwab_connector.get_account_info()
                     
-                    logger.info(f"Schwab API accounts response status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        accounts_data = response.json()
-                        logger.info(f"Successfully retrieved Schwab account data: {len(accounts_data)} accounts")
+                    if accounts:
+                        logger.info(f"Successfully retrieved Schwab account data: {len(accounts)} accounts")
                         
-                        result = {}
+                        # If token was refreshed in the specialized connector, sync it back
+                        if self.schwab_connector.access_token != self.access_token:
+                            logger.info("Synchronizing refreshed tokens from specialized connector")
+                            self.access_token = self.schwab_connector.access_token
+                            self.refresh_token = self.schwab_connector.refresh_token
+                            self.token_expiry = self.schwab_connector.token_expiry
+                            
+                            # Update session headers
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
+                            })
                         
-                        for account in accounts_data:
-                            account_id = account.get('accountId', 'unknown')
-                            account_details = account
-                            
-                            # Extract balance information with proper path for Schwab API
-                            balances = account_details.get('balances', {})
-                            positions = account_details.get('positions', [])
-                            
-                            result[account_id] = {
-                                'account_number': account_id,
-                                'cash': float(balances.get('cashBalance', 0)),
-                                'equity': float(balances.get('liquidationValue', 0)),
-                                'buying_power': float(balances.get('buyingPower', 0)),
-                                'position_count': len(positions),
-                                'account_type': account_details.get('accountType', 'Unknown'),
-                                'nickname': account_details.get('nickname', ''),
-                            }
-                            
-                        return result
-                    elif response.status_code == 401:
-                        # Try to refresh token if unauthorized
-                        logger.info("Unauthorized response, attempting to refresh token")
-                        if self.refresh_access_token():
-                            return self.get_account_info()  # Try again with new token
-                        else:
-                            logger.warning("Failed to refresh access token")
-                            return self._get_simulated_account_info()
+                        return accounts
                     else:
-                        logger.warning(f"Failed to get account info: {response.status_code}, {response.text}")
+                        logger.warning("Failed to get account info from Schwab API")
                         return self._get_simulated_account_info()
                 except Exception as e:
                     logger.error(f"Error getting Schwab account info: {str(e)}")
@@ -734,75 +669,39 @@ class APIConnector:
                     return self._get_simulated_positions()
                     
             elif self.provider == 'schwab':
-                # Check if we have a valid access token
-                if not self.access_token:
-                    logger.warning("No access token available for Schwab API")
+                # Use our specialized Schwab connector for improved reliability
+                if self.force_simulation:
+                    logger.info("Using simulation mode for Schwab positions")
                     return self._get_simulated_positions()
                 
-                # Add authorization header
-                headers = self.headers.copy()
-                headers['Authorization'] = f"Bearer {self.access_token}"
+                # Sync tokens with specialized connector
+                if self.access_token:
+                    self.schwab_connector.access_token = self.access_token
+                    self.schwab_connector.refresh_token = self.refresh_token
+                    self.schwab_connector.token_expiry = self.token_expiry
                 
-                # Use the proper endpoint from Schwab Trader API documentation
                 try:
-                    # Get accounts first to get account information
-                    accounts = self.get_account_info()
-                    if not accounts:
-                        logger.warning("No account information available for positions")
-                        return self._get_simulated_positions()
+                    logger.info("Retrieving positions using specialized Schwab connector")
+                    positions = self.schwab_connector.get_positions()
                     
-                    # Use the first account
-                    account_id = list(accounts.keys())[0]
-                    
-                    # Get positions for this account
-                    logger.info(f"Retrieving positions for Schwab account {account_id}")
-                    positions_url = f"{self.base_url}/accounts/{account_id}/positions"
-                    
-                    response = self.session.get(positions_url, headers=headers, timeout=10)
-                    logger.info(f"Schwab API positions response status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        positions_data = response.json()
-                        logger.info(f"Successfully retrieved {len(positions_data)} positions from Schwab API")
+                    if positions:
+                        logger.info(f"Successfully retrieved {len(positions)} positions from Schwab API")
                         
-                        result = []
-                        
-                        for position in positions_data:
-                            # Extract data with proper field names for Schwab API
-                            instrument = position.get('instrument', {})
-                            symbol = instrument.get('symbol')
-                            quantity = position.get('quantity', 0)
+                        # If token was refreshed in the specialized connector, sync it back
+                        if self.schwab_connector.access_token != self.access_token:
+                            logger.info("Synchronizing refreshed tokens from specialized connector")
+                            self.access_token = self.schwab_connector.access_token
+                            self.refresh_token = self.schwab_connector.refresh_token
+                            self.token_expiry = self.schwab_connector.token_expiry
                             
-                            # Skip zero positions
-                            if quantity == 0:
-                                continue
-                                
-                            price_data = position.get('priceData', {})
-                            entry_price = position.get('averagePurchasePrice', 0)
-                            current_price = price_data.get('currentPrice', 0)
-                            
-                            result.append({
-                                'symbol': symbol,
-                                'quantity': int(quantity),
-                                'entry_price': float(entry_price),
-                                'current_price': float(current_price),
-                                'market_value': float(current_price * quantity),
-                                'cost_basis': float(entry_price * quantity),
-                                'unrealized_pl': float((current_price - entry_price) * quantity),
-                                'unrealized_plpc': float((current_price - entry_price) / entry_price) if entry_price > 0 else 0,
+                            # Update session headers
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
                             })
-                            
-                        return result
-                    elif response.status_code == 401:
-                        # Try to refresh token if unauthorized
-                        logger.info("Unauthorized response, attempting to refresh token")
-                        if self.refresh_access_token():
-                            return self.get_positions()  # Try again with new token
-                        else:
-                            logger.warning("Failed to refresh access token")
-                            return self._get_simulated_positions()
+                        
+                        return positions
                     else:
-                        logger.warning(f"Failed to get positions: {response.status_code}, {response.text}")
+                        logger.warning("Failed to get positions from Schwab API")
                         return self._get_simulated_positions()
                 except Exception as e:
                     logger.error(f"Error getting Schwab positions: {str(e)}")
@@ -955,87 +854,39 @@ class APIConnector:
                     return self._get_simulated_orders(status)
                     
             elif self.provider == 'schwab':
-                # Check if we have a valid access token
-                if not self.access_token:
-                    logger.warning("No access token available for Schwab API")
+                # Use our specialized Schwab connector for improved reliability
+                if self.force_simulation:
+                    logger.info("Using simulation mode for Schwab orders")
                     return self._get_simulated_orders(status)
                 
-                # Add authorization header
-                headers = self.headers.copy()
-                headers['Authorization'] = f"Bearer {self.access_token}"
+                # Sync tokens with specialized connector
+                if self.access_token:
+                    self.schwab_connector.access_token = self.access_token
+                    self.schwab_connector.refresh_token = self.refresh_token
+                    self.schwab_connector.token_expiry = self.token_expiry
                 
-                # Use the proper endpoint from Schwab Trader API documentation
                 try:
-                    # Get accounts first to get account information
-                    accounts = self.get_account_info()
-                    if not accounts:
-                        logger.warning("No account information available for orders")
-                        return self._get_simulated_orders(status)
+                    logger.info(f"Retrieving orders using specialized Schwab connector with status={status}")
+                    orders = self.schwab_connector.get_orders(status=status)
                     
-                    # Use the first account
-                    account_id = list(accounts.keys())[0]
-                    
-                    # Build URL with appropriate query parameters
-                    orders_url = f"{self.base_url}/accounts/{account_id}/orders"
-                    params = {}
-                    
-                    if status == 'open':
-                        params['status'] = 'OPEN'
-                    elif status == 'closed':
-                        params['status'] = 'EXECUTED'
-                    
-                    logger.info(f"Retrieving orders for Schwab account {account_id} with status={status}")
-                    response = self.session.get(orders_url, params=params, headers=headers, timeout=10)
-                    logger.info(f"Schwab API orders response status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        orders_data = response.json()
-                        logger.info(f"Successfully retrieved {len(orders_data)} orders from Schwab API")
+                    if orders:
+                        logger.info(f"Successfully retrieved {len(orders)} orders from Schwab API")
                         
-                        result = []
-                        
-                        for order in orders_data:
-                            # Extract key info based on Schwab API order structure
-                            order_legs = order.get('orderLegs', [])
-                            if not order_legs:
-                                continue
-                                
-                            leg = order_legs[0]  # Use first leg for basic info
-                            symbol = leg.get('symbol')
+                        # If token was refreshed in the specialized connector, sync it back
+                        if self.schwab_connector.access_token != self.access_token:
+                            logger.info("Synchronizing refreshed tokens from specialized connector")
+                            self.access_token = self.schwab_connector.access_token
+                            self.refresh_token = self.schwab_connector.refresh_token
+                            self.token_expiry = self.schwab_connector.token_expiry
                             
-                            # Map Schwab order statuses to our standardized format
-                            status_map = {
-                                'OPEN': 'open',
-                                'EXECUTED': 'filled',
-                                'CANCELED': 'canceled',
-                                'REJECTED': 'rejected',
-                                'EXPIRED': 'expired'
-                            }
-                            
-                            result.append({
-                                'id': order.get('orderId'),
-                                'symbol': symbol,
-                                'quantity': int(leg.get('quantity', 0)),
-                                'side': leg.get('side', '').lower(),
-                                'type': order.get('orderType', '').lower(),
-                                'status': status_map.get(order.get('status'), order.get('status', '')),
-                                'submitted_at': order.get('enteredTime'),
-                                'filled_at': order.get('executedTime'),
-                                'filled_quantity': order.get('filledQuantity', 0),
-                                'filled_price': order.get('avgExecutionPrice', 0),
+                            # Update session headers
+                            self.session.headers.update({
+                                'Authorization': f'Bearer {self.access_token}'
                             })
-                            
-                        return result
-                    elif response.status_code == 401:
-                        # Try to refresh token if unauthorized
-                        logger.info("Unauthorized response, attempting to refresh token")
-                        if self.refresh_access_token():
-                            return self.get_orders(status)  # Try again with new token
-                        else:
-                            logger.warning("Failed to refresh access token")
-                            return self._get_simulated_orders(status)
+                        
+                        return orders
                     else:
-                        logger.warning(f"Failed to get orders: {response.status_code}, {response.text}")
+                        logger.warning("Failed to get orders from Schwab API")
                         return self._get_simulated_orders(status)
                 except Exception as e:
                     logger.error(f"Error getting Schwab orders: {str(e)}")
