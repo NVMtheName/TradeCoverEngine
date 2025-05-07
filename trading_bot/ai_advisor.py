@@ -113,9 +113,12 @@ class AIAdvisor:
         # List of priority models to test
         test_models = ["gpt-4o", "gpt-3.5-turbo"]
         
+        # Check for quota issues
+        quota_exceeded = False
+        
         for model in test_models:
             try:
-                # Simple test prompt to verify model access
+                # Simple test prompt to verify model access with minimal tokens
                 self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": "test"}],
@@ -124,10 +127,24 @@ class AIAdvisor:
                 available_models.append(model)
                 logger.info(f"Model {model} is available")
             except Exception as e:
-                if "not available" in str(e).lower() or "no access" in str(e).lower():
+                error_str = str(e).lower()
+                if "insufficient_quota" in error_str or "exceeded your current quota" in error_str:
+                    quota_exceeded = True
+                    logger.warning(f"API quota exceeded for model {model}. Please check billing details.")
+                elif "not available" in error_str or "no access" in error_str:
                     logger.warning(f"Model {model} is not available with current API key: {str(e)}")
                 else:
                     logger.error(f"Error testing model {model}: {str(e)}")
+        
+        # If all tests failed due to quota issues, provide a clear message
+        if quota_exceeded and not available_models:
+            logger.error("OpenAI API quota exceeded. Please check your billing details or update your API key.")
+            logger.error("To continue using AI features, update your OpenAI API key in the environment variables.")
+            # Add a fallback "fake" model for development/testing only
+            # This allows the application to run with degraded AI functionality
+            if os.environ.get("ALLOW_AI_FALLBACK", "false").lower() == "true":
+                logger.warning("Using fallback AI mode with limited functionality (development only)")
+                available_models.append("fallback")
         
         return available_models
     
@@ -184,6 +201,11 @@ class AIAdvisor:
             logger.warning(f"Model {model} not available, falling back to {fallback_model}")
             model = fallback_model
         
+        # Check if we're in fallback mode (API key issue)
+        if model == "fallback":
+            logger.info("Using fallback AI mode - generating placeholder response")
+            return self._generate_fallback_response(messages, json_response, cache_key)
+        
         # Execute the request
         try:
             start_time = time.time()
@@ -226,8 +248,107 @@ class AIAdvisor:
             return full_response
             
         except Exception as e:
-            logger.error(f"Error executing model request: {str(e)}")
-            raise
+            error_str = str(e).lower()
+            if "quota" in error_str or "insufficient_quota" in error_str:
+                logger.error("OpenAI API quota exceeded during request execution. Consider updating your API key.")
+                # Provide a clearer error message for users
+                if json_response:
+                    fallback_result = {
+                        "error": "API quota exceeded. Please check your OpenAI API key and billing details.",
+                        "recommendation": "Update your API key in the settings page."
+                    }
+                else:
+                    fallback_result = "AI analysis unavailable due to API quota limits. Please update your OpenAI API key."
+                
+                return {
+                    "result": fallback_result,
+                    "model": "error",
+                    "execution_time": 0,
+                    "error": str(e)
+                }
+            else:
+                logger.error(f"Error executing model request: {str(e)}")
+                raise
+                
+    def _generate_fallback_response(self, messages: List[Dict[str, str]], 
+                                  json_response: bool = False, 
+                                  cache_key: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Generate a fallback response when the API is unavailable.
+        This provides a graceful degradation of service rather than a complete failure.
+        
+        Args:
+            messages: The prompt messages that were sent
+            json_response: Whether JSON format was requested
+            cache_key: Cache key for the request
+            
+        Returns:
+            Dict containing a fallback response
+        """
+        # Extract the main content from the user's message
+        content = ""
+        for msg in messages:
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                break
+        
+        # Check for different types of requests based on content
+        if "covered call" in content.lower() or "analyze the stock" in content.lower():
+            # Stock analysis fallback
+            if json_response:
+                result = {
+                    "analysis": "AI analysis is currently unavailable due to API quota limitations. Please check your OpenAI API key.",
+                    "suitability_score": 5,
+                    "strike_price_recommendation": None,
+                    "days_to_expiration": None,
+                    "confidence": 0,
+                    "risks": ["AI analysis unavailable"],
+                    "rewards": ["Update your API key to restore AI functionality"]
+                }
+            else:
+                result = "AI stock analysis is currently unavailable. Please update your OpenAI API key to restore functionality."
+        
+        elif "market summary" in content.lower():
+            # Market summary fallback
+            result = "Market summary analysis is currently unavailable due to API quota limitations. Please check your OpenAI API key."
+            
+        elif "optimize" in content.lower() and "strategy" in content.lower():
+            # Strategy optimization fallback
+            if json_response:
+                result = {
+                    "profit_target_percentage": 5.0,
+                    "stop_loss_percentage": 3.0,
+                    "days_to_expiration": 30,
+                    "explanation": "Strategy parameter optimization is currently unavailable due to API quota limitations."
+                }
+            else:
+                result = "Strategy optimization is currently unavailable. Please update your OpenAI API key."
+        
+        else:
+            # Generic fallback
+            if json_response:
+                result = {
+                    "message": "AI analysis is temporarily unavailable due to API quota limitations.",
+                    "action": "Please update your OpenAI API key in the settings."
+                }
+            else:
+                result = "AI functionality is temporarily unavailable. Please update your OpenAI API key."
+        
+        response = {
+            "result": result,
+            "model": "fallback",
+            "execution_time": 0,
+            "note": "This is a fallback response due to API unavailability."
+        }
+        
+        # Cache the fallback response if a cache key was provided
+        if cache_key:
+            self.response_cache[cache_key] = {
+                "response": response,
+                "timestamp": time.time()
+            }
+        
+        return response
     
     def analyze_stock(self, symbol, price_history, financial_data=None, use_ensemble=True):
         """
