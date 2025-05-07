@@ -10,7 +10,7 @@ from the server-side to avoid CORS restrictions in the browser.
 import os
 import logging
 import requests
-from flask import Blueprint, request, jsonify, current_app, session
+from flask import Blueprint, request, jsonify, current_app, session, redirect
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -55,11 +55,9 @@ def proxy_oauth_authorize():
             redirect_url = response.headers.get('Location')
             logger.info(f"Received redirect to: {redirect_url}")
             
-            # Return a JSON response with the redirect URL
-            return jsonify({
-                "status": "redirect",
-                "redirect_url": redirect_url
-            })
+            # Instead of returning JSON, directly redirect the browser to the Schwab URL
+            # This handles the Schwab gateway UI flow properly
+            return redirect(redirect_url)
         
         # For other responses, pass through status code and content
         return (

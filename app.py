@@ -1,5 +1,8 @@
 import os
 import logging
+import json
+import pandas as pd
+import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
@@ -10,6 +13,23 @@ from datetime import datetime, timedelta
 import os.path
 import requests
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+
+# Custom JSON encoder to handle pandas DataFrames and numpy arrays
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, pd.DataFrame):
+            return obj.to_dict(orient='records')
+        elif isinstance(obj, pd.Series):
+            return obj.to_dict()
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Import our Schwab proxy module - will be imported after app initialization to avoid circular imports
 
@@ -26,6 +46,8 @@ db = SQLAlchemy(model_class=Base)
 # Create the Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", os.environ.get("FLASK_SECRET_KEY", "dev_secret_key"))
+# Set the custom JSON encoder
+app.json_encoder = CustomJSONEncoder
 # Set session permanency and lifetime
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)  # Sessions last 31 days
 app.config['SESSION_TYPE'] = 'filesystem'
