@@ -555,7 +555,27 @@
         
         // Export functionality
         document.getElementById('exportTrades').addEventListener('click', function() {
-            alert('Export functionality would download a CSV file of your trade history.');
+            // Get the table data
+            const table = document.querySelector('table');
+            const rows = Array.from(table.querySelectorAll('tr'));
+            
+            // Convert to CSV
+            const csvContent = rows.map(row => {
+                return Array.from(row.querySelectorAll('th,td'))
+                    .map(cell => cell.textContent.trim())
+                    .join(',');
+            }).join('\n');
+            
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'trade_history.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         });
         
         // Trade details modal
