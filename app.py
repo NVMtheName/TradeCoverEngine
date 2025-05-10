@@ -509,10 +509,29 @@ def dashboard():
                 open_positions = api_connector.get_open_positions()
                 
                 # Get performance data for charts
-                performance_data = {
-                    'equity_history': api_connector.get_equity_history(),
-                    'monthly_returns': api_connector.get_monthly_returns()
-                }
+                equity_history = api_connector.get_equity_history()
+                monthly_returns = api_connector.get_monthly_returns()
+                
+                # Convert pandas DataFrames to dictionaries for JSON serialization
+                performance_data = {}
+                
+                if isinstance(equity_history, pd.DataFrame):
+                    # Create a dict with dates as strings and equity values
+                    performance_data['equity_history'] = {
+                        'dates': equity_history.index.strftime('%Y-%m-%d').tolist(),
+                        'equity': equity_history['equity'].tolist() if 'equity' in equity_history else []
+                    }
+                else:
+                    performance_data['equity_history'] = {'dates': [], 'equity': []}
+                    
+                if isinstance(monthly_returns, pd.DataFrame):
+                    # Convert monthly returns to a dict with months and return values
+                    performance_data['monthly_returns'] = {
+                        'months': monthly_returns.index.strftime('%Y-%m').tolist(),
+                        'returns': monthly_returns['returns'].tolist() if 'returns' in monthly_returns else []
+                    }
+                else:
+                    performance_data['monthly_returns'] = {'months': [], 'returns': []}
             else:
                 # Set API status to Error for the alert to display
                 account_info = api_connector.get_account_info()
