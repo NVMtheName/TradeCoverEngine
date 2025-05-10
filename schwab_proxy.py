@@ -73,16 +73,15 @@ def proxy_oauth_authorize():
                     'correlationId': request.args.get('correlationId', 'Not provided')
                 }
                 
-                # Redirect to settings page with helpful error
-                flash("Connection to Schwab Gateway is not available from the development environment. " +
-                      "This would normally redirect to the Schwab login page. " +
-                      "For production deployment, ensure your domain is whitelisted with Schwab.", "warning")
+                # Follow the redirect to the Schwab login page
+                # This is the correct behavior in both development and production
+                logger.info(f"Following redirect to Schwab gateway: {redirect_url}")
                 
-                # Provide diagnostic information
-                flash("Technical details: The Schwab API is attempting to redirect to their gateway UI for authentication, " +
-                      "but this may be blocked in development environments or require domain whitelisting.", "info")
+                # Provide diagnostic information in case it fails
+                flash("Redirecting to Schwab login page. If you encounter any issues, make sure your Replit domain is whitelisted in the Schwab Developer Portal.", "info")
                 
-                return redirect(url_for('settings'))
+                # Actually redirect to the Schwab login page
+                return redirect(redirect_url)
             
             # For other redirects, follow them directly
             return redirect(redirect_url)
