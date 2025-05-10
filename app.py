@@ -176,17 +176,19 @@ def initialize_app():
                 logger.info("Using default settings (no user logged in)")
             
             if not settings:
-                # Create default settings
+                # Create default settings with simulation mode enabled by default
                 settings = Settings(
-                    api_provider="alpaca",
-                    api_key=os.environ.get("TRADING_API_KEY", ""),
-                    api_secret=os.environ.get("TRADING_API_SECRET", ""),
+                    api_provider="schwab",
+                    api_key=os.environ.get("SCHWAB_API_KEY", ""),
+                    api_secret=os.environ.get("SCHWAB_API_SECRET", ""),
                     is_paper_trading=True,
+                    force_simulation_mode=True,  # Enable simulation mode by default
                     risk_level="moderate",
                     max_position_size=5000,
                     profit_target_percentage=5,
                     stop_loss_percentage=3,
-                    options_expiry_days=30
+                    options_expiry_days=30,
+                    enabled_strategies='covered_call'
                 )
                 db.session.add(settings)
                 db.session.commit()
