@@ -5,13 +5,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
+
     // Initialize popovers
     var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
     var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
         return new bootstrap.Popover(popoverTriggerEl);
     });
-    
+
     // Account summary card - show/hide details
     const accountDetailsToggle = document.getElementById('accountDetailsToggle');
     if (accountDetailsToggle) {
@@ -26,14 +26,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Recent trades table - add expand/collapse functionality for details
     const tradeDetailButtons = document.querySelectorAll('.trade-detail-btn');
     tradeDetailButtons.forEach(button => {
         button.addEventListener('click', function() {
             const tradeId = this.getAttribute('data-trade-id');
             const detailRow = document.getElementById(`tradeDetail${tradeId}`);
-            
+
             if (detailRow.classList.contains('d-none')) {
                 detailRow.classList.remove('d-none');
                 this.innerHTML = '<i class="fas fa-chevron-up"></i>';
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    
+
     // Initialize performance charts if the elements exist
     initializePerformanceCharts();
 });
@@ -53,7 +53,7 @@ function initializePerformanceCharts() {
     // Check if the chart containers exist
     const equityChartElement = document.getElementById('equityChart');
     const returnsChartElement = document.getElementById('monthlyReturnsChart');
-    
+
     if (equityChartElement) {
         // Get data from the data attribute
         const equityData = equityChartElement.getAttribute('data-equity');
@@ -66,7 +66,7 @@ function initializePerformanceCharts() {
             }
         }
     }
-    
+
     if (returnsChartElement) {
         // Get data from the data attribute
         const returnsData = returnsChartElement.getAttribute('data-returns');
@@ -84,7 +84,7 @@ function initializePerformanceCharts() {
 // Create equity chart
 function createEquityChart(element, data) {
     const ctx = element.getContext('2d');
-    
+
     new Chart(ctx, {
         type: 'line',
         data: {
@@ -149,16 +149,16 @@ function createEquityChart(element, data) {
 // Create monthly returns chart
 function createMonthlyReturnsChart(element, data) {
     const ctx = element.getContext('2d');
-    
+
     // Create colors array based on return values (positive = green, negative = red)
     const colors = data.returns.map(value => 
         value >= 0 ? 'rgba(40, 167, 69, 0.7)' : 'rgba(220, 53, 69, 0.7)'
     );
-    
+
     const borderColors = data.returns.map(value => 
         value >= 0 ? 'rgba(40, 167, 69, 1)' : 'rgba(220, 53, 69, 1)'
     );
-    
+
     new Chart(ctx, {
         type: 'bar',
         data: {
@@ -210,11 +210,11 @@ function createMonthlyReturnsChart(element, data) {
 // Function to update position status indicators
 function updatePositionStatuses() {
     const positions = document.querySelectorAll('.position-item');
-    
+
     positions.forEach(position => {
         const plPercentage = parseFloat(position.getAttribute('data-pl-percent'));
         const statusIndicator = position.querySelector('.position-status');
-        
+
         if (plPercentage >= 5) {
             statusIndicator.className = 'position-status bg-success';
             statusIndicator.setAttribute('title', 'Target profit reached');
@@ -233,3 +233,8 @@ function updatePositionStatuses() {
 
 // Call update function when page loads
 document.addEventListener('DOMContentLoaded', updatePositionStatuses);
+
+// Project download functionality
+document.getElementById('downloadProject').addEventListener('click', function() {
+    window.location.href = '/download_project';
+});

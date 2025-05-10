@@ -48,7 +48,7 @@
         </div>
     </div>
     {% endif %}
-    
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1><i class="fas fa-tachometer-alt me-2"></i> Dashboard</h1>
         <div>
@@ -57,7 +57,7 @@
             </button>
         </div>
     </div>
-    
+
     {% if account_info.get('api_status') == 'Error' and request.path == '/dashboard' %}
     <div class="alert alert-warning alert-dismissible fade show" role="alert">
         <h5 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> Schwab API Connection Issue</h5>
@@ -172,7 +172,7 @@
                             <span class="fw-bold">${{ account_info.get('buying_power', '0.00') }}</span>
                         </li>
                     </ul>
-                    
+
                     <div id="accountDetailsSection" style="display: none;">
                         <hr>
                         <ul class="list-group list-group-flush">
@@ -345,6 +345,15 @@
             {% endif %}
         </div>
     </div>
+
+    <div class="card dashboard-card mt-4">
+        <div class="card-body">
+            <h5><i class="fas fa-download me-2"></i>Project Management</h5>
+            <button id="downloadProject" class="btn btn-primary">
+                <i class="fas fa-file-archive me-2"></i>Download Project
+            </button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -354,7 +363,7 @@
     document.getElementById('refreshDashboard').addEventListener('click', function() {
         this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Refreshing...';
         this.disabled = true;
-        
+
         // Simulate refresh
         setTimeout(() => {
             window.location.reload();
