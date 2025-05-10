@@ -1,0 +1,46 @@
+{
+  "name": "Schwab Trading Bot",
+  "description": "A sophisticated trading bot with Schwab API integration and AI-powered analytics",
+  "repository": "https://github.com/yourusername/trading-bot",
+  "keywords": ["python", "flask", "trading", "schwab", "ai"],
+  "addons": [
+    "heroku-postgresql:hobby-dev",
+    "quotaguardstatic:starter"
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "env": {
+    "SECRET_KEY": {
+      "description": "A secret key for Flask sessions",
+      "generator": "secret"
+    },
+    "SCHWAB_API_KEY": {
+      "description": "Your Schwab API key",
+      "required": true
+    },
+    "SCHWAB_API_SECRET": {
+      "description": "Your Schwab API secret",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "Optional: Your OpenAI API key for AI features",
+      "required": false
+    },
+    "FLASK_ENV": {
+      "description": "Flask environment (production or development)",
+      "value": "production"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "scripts": {
+    "postdeploy": "python -c 'from app import app, db; with app.app_context(): db.create_all()'"
+  }
+}
