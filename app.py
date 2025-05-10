@@ -515,21 +515,41 @@ def dashboard():
                 # Convert pandas DataFrames to dictionaries for JSON serialization
                 performance_data = {}
                 
-                if isinstance(equity_history, pd.DataFrame):
+                if isinstance(equity_history, pd.DataFrame) and len(equity_history) > 0:
                     # Create a dict with dates as strings and equity values
-                    performance_data['equity_history'] = {
-                        'dates': equity_history.index.strftime('%Y-%m-%d').tolist(),
-                        'equity': equity_history['equity'].tolist() if 'equity' in equity_history else []
-                    }
+                    try:
+                        # Check if index is DatetimeIndex, otherwise convert to strings directly
+                        if isinstance(equity_history.index, pd.DatetimeIndex):
+                            dates = equity_history.index.strftime('%Y-%m-%d').tolist()
+                        else:
+                            dates = [str(x) for x in equity_history.index.tolist()]
+                            
+                        performance_data['equity_history'] = {
+                            'dates': dates,
+                            'equity': equity_history['equity'].tolist() if 'equity' in equity_history else []
+                        }
+                    except Exception as e:
+                        logger.warning(f"Error processing equity history: {str(e)}")
+                        performance_data['equity_history'] = {'dates': [], 'equity': []}
                 else:
                     performance_data['equity_history'] = {'dates': [], 'equity': []}
                     
-                if isinstance(monthly_returns, pd.DataFrame):
+                if isinstance(monthly_returns, pd.DataFrame) and len(monthly_returns) > 0:
                     # Convert monthly returns to a dict with months and return values
-                    performance_data['monthly_returns'] = {
-                        'months': monthly_returns.index.strftime('%Y-%m').tolist(),
-                        'returns': monthly_returns['returns'].tolist() if 'returns' in monthly_returns else []
-                    }
+                    try:
+                        # Check if index is DatetimeIndex, otherwise convert to strings directly
+                        if isinstance(monthly_returns.index, pd.DatetimeIndex):
+                            months = monthly_returns.index.strftime('%Y-%m').tolist()
+                        else:
+                            months = [str(x) for x in monthly_returns.index.tolist()]
+                            
+                        performance_data['monthly_returns'] = {
+                            'months': months,
+                            'returns': monthly_returns['returns'].tolist() if 'returns' in monthly_returns else []
+                        }
+                    except Exception as e:
+                        logger.warning(f"Error processing monthly returns: {str(e)}")
+                        performance_data['monthly_returns'] = {'months': [], 'returns': []}
                 else:
                     performance_data['monthly_returns'] = {'months': [], 'returns': []}
             else:

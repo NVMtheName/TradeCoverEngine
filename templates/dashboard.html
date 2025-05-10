@@ -300,17 +300,17 @@
                         </thead>
                         <tbody>
                             {% for position in open_positions %}
-                                <tr class="position-item" data-pl-percent="{{ position.unrealized_plpc }}">
-                                    <td><strong>{{ position.symbol }}</strong></td>
-                                    <td>{{ position.quantity }}</td>
-                                    <td>${{ "%.2f"|format(position.avg_entry_price) }}</td>
-                                    <td>${{ "%.2f"|format(position.current_price) }}</td>
-                                    <td>${{ "%.2f"|format(position.market_value) }}</td>
-                                    <td class="{% if position.unrealized_pl >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                        ${{ "%.2f"|format(position.unrealized_pl) }}
+                                <tr class="position-item" data-pl-percent="{{ position.get('unrealized_plpc', 0) }}">
+                                    <td><strong>{{ position.get('symbol', 'N/A') }}</strong></td>
+                                    <td>{{ position.get('quantity', 0) }}</td>
+                                    <td>${{ "%.2f"|format(position.get('avg_entry_price', 0)) }}</td>
+                                    <td>${{ "%.2f"|format(position.get('current_price', 0)) }}</td>
+                                    <td>${{ "%.2f"|format(position.get('market_value', 0)) }}</td>
+                                    <td class="{% if position.get('unrealized_pl', 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        ${{ "%.2f"|format(position.get('unrealized_pl', 0)) }}
                                     </td>
-                                    <td class="{% if position.unrealized_plpc >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                        {{ "%.2f"|format(position.unrealized_plpc) }}%
+                                    <td class="{% if position.get('unrealized_plpc', 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ "%.2f"|format(position.get('unrealized_plpc', 0)) }}%
                                     </td>
                                     <td>
                                         <span class="position-status" title="Loading status..."></span>
