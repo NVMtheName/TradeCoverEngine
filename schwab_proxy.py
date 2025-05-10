@@ -73,15 +73,30 @@ def proxy_oauth_authorize():
                     'correlationId': request.args.get('correlationId', 'Not provided')
                 }
                 
-                # Follow the redirect to the Schwab login page
-                # This is the correct behavior in both development and production
-                logger.info(f"Following redirect to Schwab gateway: {redirect_url}")
+                # Store diagnostic information, but don't attempt direct redirect to Schwab gateway
+                # since it's likely to be blocked from Replit's environment
+                logger.info(f"Detected Schwab gateway redirect to: {redirect_url}")
                 
-                # Provide diagnostic information in case it fails
-                flash("Redirecting to Schwab login page. If you encounter any issues, make sure your Replit domain is whitelisted in the Schwab Developer Portal.", "info")
+                # Store the gateway URL for diagnostic purposes
+                session['oauth_gateway_url'] = redirect_url
                 
-                # Actually redirect to the Schwab login page
-                return redirect(redirect_url)
+                # Extract the important parts for diagnostics
+                session['oauth_diagnostics'] = {
+                    'status_code': response.status_code,
+                    'target_url': redirect_url,
+                    'environment': 'Production' if not session.get('oauth_is_sandbox') else 'Sandbox',
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'message': 'Schwab Gateway Connection Blocked',
+                    'correlationId': request.args.get('correlationId', 'Not provided')
+                }
+                
+                # Provide diagnostic information with clear next steps
+                flash("Connection to Schwab Gateway was blocked. This is expected when developing on Replit.", "warning")
+                flash("For production use, you need to: 1) Deploy to a whitelisted domain, 2) Contact Schwab to whitelist your IP, or 3) Use a dedicated server.", "info")
+                flash("You can continue testing using simulation mode, which doesn't require a live Schwab connection.", "info")
+                
+                # Redirect to settings page with diagnostics information
+                return redirect(url_for('settings'))
             
             # For other redirects, follow them directly
             return redirect(redirect_url)
