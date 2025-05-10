@@ -152,8 +152,10 @@ def initialize_app():
                     settings = Settings(
                         user_id=current_user.id,
                         api_provider="schwab",
+                        api_key=os.environ.get("SCHWAB_API_KEY", ""),  # Use environment variables 
+                        api_secret=os.environ.get("SCHWAB_API_SECRET", ""),
                         is_paper_trading=True,
-                        force_simulation_mode=True,
+                        force_simulation_mode=True,  # Enable simulation mode by default
                         risk_level="moderate",
                         max_position_size=5000.0,
                         profit_target_percentage=5.0,
@@ -178,11 +180,11 @@ def initialize_app():
             if not settings:
                 # Create default settings with simulation mode enabled by default
                 settings = Settings(
-                    api_provider="schwab",
-                    api_key=os.environ.get("SCHWAB_API_KEY", ""),
+                    api_provider="schwab",  # Use Schwab as the default provider
+                    api_key=os.environ.get("SCHWAB_API_KEY", ""),  # Use environment variables 
                     api_secret=os.environ.get("SCHWAB_API_SECRET", ""),
-                    is_paper_trading=True,
-                    force_simulation_mode=True,  # Enable simulation mode by default
+                    is_paper_trading=True,  # Use paper trading mode
+                    force_simulation_mode=True,  # Enable simulation mode by default for non-logged-in users
                     risk_level="moderate",
                     max_position_size=5000,
                     profit_target_percentage=5,
@@ -436,12 +438,14 @@ def register():
         user = User(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data)
         
-        # Create user-specific settings
+        # Create user-specific settings with Schwab and simulation mode enabled by default
         settings = Settings(
             user=user,
             api_provider="schwab",
+            api_key=os.environ.get("SCHWAB_API_KEY", ""),  # Use environment variables 
+            api_secret=os.environ.get("SCHWAB_API_SECRET", ""),
             is_paper_trading=True,
-            force_simulation_mode=True,
+            force_simulation_mode=True,  # Start with simulation mode enabled for safety
             risk_level="moderate",
             max_position_size=5000.0,
             profit_target_percentage=5.0,
@@ -603,8 +607,10 @@ def settings():
         settings = Settings(
             user_id=current_user.id,
             api_provider="schwab",
+            api_key=os.environ.get("SCHWAB_API_KEY", ""),  # Use environment variables 
+            api_secret=os.environ.get("SCHWAB_API_SECRET", ""),
             is_paper_trading=True,
-            force_simulation_mode=True,
+            force_simulation_mode=True,  # Enable simulation mode by default
             risk_level="moderate",
             max_position_size=5000.0,
             profit_target_percentage=5.0,
