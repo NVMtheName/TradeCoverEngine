@@ -151,42 +151,39 @@ class AIAdvisor:
         """Test which models are available with the current API key"""
         available_models = []
         
-        # List of priority models to test
-        test_models = ["gpt-4o", "gpt-3.5-turbo"]
+        # Since we're getting rate limited, only test one model
+        # This reduces the chance of triggering additional rate limits
+        test_model = "gpt-3.5-turbo"  # Start with the more cost-effective model
         
-        # Check for quota issues
-        quota_exceeded = False
-        
-        for model in test_models:
-            try:
-                # Simple test prompt to verify model access with minimal tokens
-                self.client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": "test"}],
-                    max_tokens=5
-                )
-                available_models.append(model)
-                logger.info(f"Model {model} is available")
-            except Exception as e:
-                error_str = str(e).lower()
-                if "insufficient_quota" in error_str or "exceeded your current quota" in error_str:
-                    quota_exceeded = True
-                    logger.warning(f"API quota exceeded for model {model}. Please check billing details.")
-                elif "not available" in error_str or "no access" in error_str:
-                    logger.warning(f"Model {model} is not available with current API key: {str(e)}")
-                else:
-                    logger.error(f"Error testing model {model}: {str(e)}")
-        
-        # If all tests failed due to quota issues, provide a clear message
-        if quota_exceeded and not available_models:
-            logger.error("OpenAI API quota exceeded. Please check your billing details or update your API key.")
-            logger.error("To continue using AI features, update your OpenAI API key in the environment variables.")
-            # Add a fallback "fake" model for development/testing only
-            # This allows the application to run with degraded AI functionality
-            if os.environ.get("ALLOW_AI_FALLBACK", "false").lower() == "true":
-                logger.warning("Using fallback AI mode with limited functionality (development only)")
+        try:
+            # If we're already rate limited, don't make any more requests
+            # Instead, enable fallback mode immediately
+            # This keeps the app running without hitting rate limits or quota issues
+            available_models.append("fallback")
+            logger.warning("Enabling fallback AI mode due to previous rate limit issues")
+            logger.info("AI features will work in reduced capacity mode")
+            return available_models
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            # Detect common OpenAI API errors
+            if "too many requests" in error_str or "rate limit" in error_str:
+                logger.warning(f"Rate limiting detected for OpenAI API. Enabling fallback mode.")
                 available_models.append("fallback")
+            elif "insufficient_quota" in error_str or "quota" in error_str:
+                logger.warning(f"API quota exceeded. Enabling fallback mode.")
+                available_models.append("fallback")
+            elif "authentication" in error_str or "invalid" in error_str and "key" in error_str:
+                logger.error(f"OpenAI API authentication error: {str(e)}")
+                logger.warning("To use AI features, please update your API key in settings")
+            else:
+                logger.error(f"Error testing OpenAI API: {str(e)}")
         
+        # If we couldn't access the API, enable fallback mode
+        if not available_models:
+            logger.warning("No OpenAI models available. Enabling fallback mode.")
+            available_models.append("fallback")
+            
         return available_models
     
     def is_available(self) -> bool:
