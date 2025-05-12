@@ -4,7 +4,7 @@
   "repository": "https://github.com/yourusername/trading-bot",
   "keywords": ["python", "flask", "trading", "schwab", "ai"],
   "addons": [
-    "heroku-postgresql:hobby-dev",
+    "heroku-postgresql:mini",
     "quotaguardstatic:starter"
   ],
   "buildpacks": [
@@ -63,7 +63,7 @@
         "PYTEST_ADDOPTS": "--no-header --no-summary -v"
       },
       "addons": [
-        "heroku-postgresql:hobby-dev"
+        "heroku-postgresql:mini"
       ]
     }
   },

@@ -1,52 +1,72 @@
-# How to Fix Heroku Deployment Error
+# Fixing Heroku Deployment
 
-I've created several files to fix the deployment error you're seeing:
+This guide has been updated to address the deprecation of Heroku's hobby-dev PostgreSQL plan.
 
-## 1. Added Test Directory and Basic Tests
+## Updated PostgreSQL Plan
 
-The error in your screenshot shows that Heroku can't detect any runnable tests. I've created:
+Heroku has discontinued the `hobby-dev` PostgreSQL plan. All configurations have been updated to use the new `mini` plan instead.
 
-- `tests/test_basic.py` - A basic test file that verifies the app loads
-- `pytest.ini` - Configuration for pytest
+The following files have been updated:
+- app.json
+- heroku.yml
+- app.ci
+- github_actions_deployment.md
 
-## 2. Updated Requirements
+## Deployment Instructions
 
-- Added `pytest==7.3.1` to `requirements-heroku.txt`
-- **Important**: When you download the files, rename `requirements-heroku.txt` to `requirements.txt`
+To deploy to Heroku with the updated configuration:
 
-## 3. Added Heroku-specific Configuration Files
+1. Make sure you have the Heroku CLI installed and are logged in.
 
-- `heroku.yml` - Container definition for Heroku (optional but helpful)
-- `Procfile.windows` - For local testing on Windows
-
-## Steps to Deploy Successfully:
-
-1. **Download project files** from Replit (use the three dots in file explorer)
-
-2. **Rename `requirements-heroku.txt` to `requirements.txt`**
-
-3. **Push to GitHub:**
+2. Create a new Heroku app:
    ```bash
-   git init
-   git add .
-   git commit -m "Fix Heroku deployment issues"
-   git branch -M main
-   git remote add origin https://github.com/yourusername/your-repo.git
-   git push -u origin main
+   heroku create your-app-name
    ```
 
-4. **Deploy to Heroku** (from your GitHub repo or using Heroku CLI)
-
-5. **If you still get errors**, try these commands:
+3. Add the PostgreSQL mini plan:
    ```bash
-   # If using Heroku CLI
-   heroku buildpacks:set heroku/python
-   heroku config:set DISABLE_COLLECTSTATIC=1
+   heroku addons:create heroku-postgresql:mini -a your-app-name
+   ```
+
+4. Add QuotaGuard Static IP (for Schwab API access):
+   ```bash
+   heroku addons:create quotaguardstatic:starter -a your-app-name
+   ```
+
+5. Set required environment variables:
+   ```bash
+   heroku config:set SCHWAB_API_KEY=your_key -a your-app-name
+   heroku config:set SCHWAB_API_SECRET=your_secret -a your-app-name
+   heroku config:set FLASK_ENV=production -a your-app-name
+   ```
+
+6. Deploy using the Heroku Git remote:
+   ```bash
    git push heroku main
-
-   # Or if using GitHub deployment, set these in the Heroku dashboard
-   # Settings → Config Vars → Add:
-   # DISABLE_COLLECTSTATIC = 1
    ```
 
-Let me know if you need help with any specific part of this process.
+## Alternative: Deploying with GitHub Actions
+
+We've set up GitHub Actions workflows to handle CI/CD more reliably than Heroku CI. See the `github_actions_deployment.md` file for detailed instructions on setting up GitHub repository secrets and deploying with GitHub Actions.
+
+The main advantages of the GitHub Actions approach:
+- More reliable build process
+- Customizable test environment
+- Ability to deploy with a static IP address
+- Better secret handling
+
+## Troubleshooting
+
+If you encounter issues with the PostgreSQL plan, try the following:
+
+1. Check the current available plans:
+   ```bash
+   heroku addons:plans heroku-postgresql
+   ```
+
+2. If you need to upgrade an existing app:
+   ```bash
+   heroku addons:upgrade heroku-postgresql:mini -a your-app-name
+   ```
+
+3. If you receive an error about invalid app.json, make sure all files are updated to use the "mini" plan instead of "hobby-dev".

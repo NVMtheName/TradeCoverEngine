@@ -109,8 +109,8 @@ heroku login
 # Create the app
 heroku create schwab-trading-bot
 
-# Add PostgreSQL
-heroku addons:create heroku-postgresql:hobby-dev -a schwab-trading-bot
+# Add PostgreSQL (using the mini plan - hobby-dev is no longer available)
+heroku addons:create heroku-postgresql:mini -a schwab-trading-bot
 
 # Add QuotaGuard Static IP (for Schwab API)
 heroku addons:create quotaguardstatic:starter -a schwab-trading-bot
