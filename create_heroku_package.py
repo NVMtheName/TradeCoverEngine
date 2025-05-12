@@ -83,6 +83,16 @@ EXCLUDE_PATTERNS = [
     'node_modules',
 ]
 
+# Files that should not be excluded by .gitignore
+FORCE_INCLUDE = [
+    'requirements.txt',
+    'requirements-heroku.txt',
+    'requirements.txt',
+    'Procfile',
+    'runtime.txt',
+    'app.json',
+]
+
 # Additional files to create or modify
 ADDITIONAL_FILES = {
     'README_HEROKU.md': """# Trading Bot - GitHub to Heroku Deployment
@@ -577,6 +587,30 @@ def ensure_requirements(target_dir):
     requirements_path = os.path.join(target_dir, 'requirements.txt')
     heroku_requirements_path = os.path.join(target_dir, 'requirements-heroku.txt')
     
+    # Create a basic requirements.txt file if none exists
+    if not os.path.exists(requirements_path) and not os.path.exists(heroku_requirements_path):
+        default_requirements = """flask==2.2.3
+flask-login==0.6.2
+flask-sqlalchemy==3.0.3
+flask-wtf==1.1.1
+gunicorn==20.1.0
+matplotlib==3.7.1
+numpy==1.24.2
+pandas==2.0.0
+psycopg2-binary==2.9.6
+pytest==7.3.1
+pytest-tap==3.3
+python-dateutil==2.8.2
+requests==2.28.2
+sqlalchemy==2.0.9
+werkzeug==2.2.3
+wtforms==3.0.1
+"""
+        with open(requirements_path, 'w') as req_file:
+            req_file.write(default_requirements)
+        print("Created new requirements.txt with essential dependencies")
+        return
+    
     # Check if we have Heroku specific requirements
     if os.path.exists(heroku_requirements_path):
         with open(heroku_requirements_path, 'r') as heroku_file:
@@ -587,6 +621,29 @@ def ensure_requirements(target_dir):
             req_file.write(heroku_requirements)
             
         print("Updated requirements.txt with Heroku-specific dependencies")
+    else:
+        # Make sure requirements.txt exists
+        if not os.path.exists(requirements_path):
+            default_requirements = """flask==2.2.3
+flask-login==0.6.2
+flask-sqlalchemy==3.0.3
+flask-wtf==1.1.1
+gunicorn==20.1.0
+matplotlib==3.7.1
+numpy==1.24.2
+pandas==2.0.0
+psycopg2-binary==2.9.6
+pytest==7.3.1
+pytest-tap==3.3
+python-dateutil==2.8.2
+requests==2.28.2
+sqlalchemy==2.0.9
+werkzeug==2.2.3
+wtforms==3.0.1
+"""
+            with open(requirements_path, 'w') as req_file:
+                req_file.write(default_requirements)
+            print("Created new requirements.txt with essential dependencies")
         
     # Create a runtime.txt file to specify Python version
     runtime_path = os.path.join(target_dir, 'runtime.txt')

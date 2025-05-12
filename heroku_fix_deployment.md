@@ -1,62 +1,64 @@
-# Fixing Heroku Deployment Issues
+# Fix for Heroku Deployment Issues
 
-## Current Issues
+## The Problem
 
-There are two main issues with the Heroku deployment:
+Heroku requires a `requirements.txt` file in the root directory of your project to detect and deploy Python applications properly. Without this file, Heroku will fail to build your app with the error:
 
-1. **Dependency Conflicts**: 
-   - The error shows that Flask-SQLAlchemy 3.0.3 requires Flask>=2.2, but the requirements file specifies Flask==2.0.1
-   - This causes a dependency resolution conflict
-
-2. **Deprecated Python Runtime Configuration**:
-   - The `runtime.txt` file is deprecated in favor of `.python-version`
-   - Python 3.9.13 should be updated to the latest 3.9.x version
-
-## Solutions
-
-### 1. Fix Requirements.txt
-
-I've created a new `fixed_requirements.txt` file that resolves the dependency conflicts:
-- Updated Flask to be >=2.2.0 (to satisfy Flask-SQLAlchemy's requirements)
-- Updated Werkzeug to be >=2.2.0 (as newer Flask requires newer Werkzeug)
-- Updated Flask-Login to be >=0.6.0 (for compatibility with newer Flask)
-- Used minimum version requirements (>=) instead of pinned versions to allow more flexibility
-- Added pytest-tap to ensure TAP testing works in all environments
-
-To use this updated requirements file:
-
-```bash
-mv fixed_requirements.txt requirements.txt
-git add requirements.txt
-git commit -m "Update dependencies to resolve conflicts"
+```
+Error: Couldn't find any supported Python package manager files.
 ```
 
-### 2. Update Python Runtime Configuration
+## The Solution
 
-I've created a `.python-version` file that follows the new recommended approach:
-- Uses only the major Python version (3.9)
-- This allows Heroku to automatically use the latest 3.9.x version (currently 3.9.22)
-- Will receive security updates automatically
+I've created a simple script to fix this issue. Before pushing to GitHub or deploying to Heroku, run:
 
-You should remove the deprecated `runtime.txt` file:
-
-```bash
-git rm runtime.txt
-git add .python-version
-git commit -m "Switch to .python-version for Python runtime specification"
+```
+python fix_heroku_deploy.py
 ```
 
-### Full Deployment Fix
+This script:
+1. Creates a proper `requirements.txt` file in the project root
+2. Adds a `runtime.txt` file to specify Python 3.11
+3. Ensures a `Procfile` exists for proper web process configuration
 
-To fix your Heroku deployment completely:
+## Deployment Steps
 
-1. Apply both changes above
-2. Push to Heroku:
-   ```bash
-   git push heroku main
+1. Run the fix script:
    ```
+   python fix_heroku_deploy.py
+   ```
+   
+2. Upload to GitHub:
+   - Create a repository at github.com
+   - Upload all files using drag & drop in your browser
+   - Make sure to include the requirements.txt, runtime.txt and Procfile files
+   
+3. Connect to Heroku:
+   - Create a new app in the Heroku dashboard
+   - Go to the "Deploy" tab
+   - Select "GitHub" as the deployment method
+   - Connect to your GitHub repository
+   - Enable automatic deploys
+   - Perform a manual deploy
 
-3. Verify the build completes successfully
-4. Monitor the application for any issues
+4. Add a database:
+   - Go to "Resources" tab
+   - Add "Heroku Postgres" (mini plan)
+   
+5. Initialize database:
+   - Go to "More" → "Run console"
+   - Run: `python migrate_db.py`
+   
+6. Set up API Keys:
+   - Go to "Settings" → "Config Vars"
+   - Add your API keys (SCHWAB_API_KEY, etc.)
 
-This should resolve the "Unable to install dependencies using pip" error and the Python runtime warnings.
+## Checklist for Successful Deployment
+
+Ensure the following files are in your repository root directory:
+- [x] requirements.txt
+- [x] runtime.txt
+- [x] Procfile
+- [x] app.json (for Heroku button)
+
+These files should NOT be in .gitignore and must be committed to GitHub.
