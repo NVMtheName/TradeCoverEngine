@@ -1,0 +1,60 @@
+name: Run Tests with TAP
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest pytest-tap bs4
+    
+    - name: Create test results directory
+      run: mkdir -p test_results
+    
+    - name: Run tests with TAP output
+      run: |
+        python -m pytest --tap-files --tap-outdir=test_results
+    
+    - name: Generate TAP summary
+      run: |
+        echo "# Test Results Summary" > test_summary.md
+        echo "## TAP Output" >> test_summary.md
+        echo '```' >> test_summary.md
+        cat test_results/tap-combined.tap >> test_summary.md
+        echo '```' >> test_summary.md
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-results
+        path: test_results/
+    
+    - name: Upload test summary
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-summary
+        path: test_summary.md
