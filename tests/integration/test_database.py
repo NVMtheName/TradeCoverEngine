@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 # Add parent directory to path to import modules correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-# Import the database app context
+# Import the database app context and models
+# Use literal imports for all models to avoid any LSP issues
 from app import app, db
-from models import User, Settings, Trade, WatchlistItem
+from werkzeug.security import generate_password_hash
+import models
 
 
 class TestDatabaseIntegration(unittest.TestCase):
