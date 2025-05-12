@@ -1,65 +1,54 @@
+"""
+Pytest configuration file for tests.
+"""
+
 import os
 import sys
 import pytest
-from werkzeug.security import generate_password_hash
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
 
-# Add the parent directory to the path
+# Add the parent directory to sys.path so that imports work correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app, db
-import models
+from app import app as flask_app
+from app import db as flask_db
 
 
-@pytest.fixture(scope='function')
-def test_app():
-    """Fixture to provide a Flask app with a test database"""
-    # Configure the app for testing
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['WTF_CSRF_ENABLED'] = False
+@pytest.fixture
+def app():
+    """
+    Create a Flask app for testing.
+    """
+    # Override config for testing
+    flask_app.config.update({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': os.environ.get('DATABASE_URL', 'sqlite:///:memory:'),
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
     
-    # Create database and context
+    # Set up app context
+    with flask_app.app_context():
+        yield flask_app
+
+
+@pytest.fixture
+def client(app):
+    """
+    Create a test client for the app.
+    """
+    return app.test_client()
+
+
+@pytest.fixture
+def db(app):
+    """
+    Provide the database instance.
+    """
+    # Set up clean tables for tests
     with app.app_context():
-        db.create_all()
-        
-        # Create a test user
-        test_user = models.User()
-        test_user.username = 'testuser'
-        test_user.email = 'testuser@example.com'
-        test_user.password_hash = generate_password_hash('password123')
-        db.session.add(test_user)
-        db.session.flush()  # Flush to get the ID without committing
-        
-        # Create default settings
-        test_settings = models.Settings()
-        test_settings.user_id = test_user.id
-        test_settings.api_provider = 'schwab'
-        test_settings.is_paper_trading = True
-        test_settings.force_simulation_mode = True
-        test_settings.risk_level = 'moderate'
-        db.session.add(test_settings)
-        db.session.commit()
-        
-        yield app
-        
-        # Clean up
-        db.session.remove()
-        db.drop_all()
-
-
-@pytest.fixture(scope='function')
-def client(test_app):
-    """Fixture to provide a Flask test client"""
-    return test_app.test_client()
-
-
-@pytest.fixture(scope='function')
-def authenticated_client(test_app):
-    """Fixture to provide an authenticated Flask test client"""
-    with test_app.test_client() as client:
-        # Log in the test user
-        client.post('/login', data={
-            'username': 'testuser',
-            'password': 'password123'
-        }, follow_redirects=True)
-        yield client
+        flask_db.create_all()
+        yield flask_db
+        flask_db.session.remove()
+        flask_db.drop_all()

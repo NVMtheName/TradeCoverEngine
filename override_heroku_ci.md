@@ -1,58 +1,79 @@
-# Override Heroku CI Test Configuration
+# Fixing Heroku CI Test Configuration
 
-Based on your error message, Heroku CI is still having issues detecting tests. After trying multiple approaches with configuration files, here's a direct manual solution:
+If you're encountering the error "Unable to detect any runnable tests" in Heroku CI, this guide will help you fix it.
 
-## Critical Files Added
+## The Problem
 
-1. **bin/test** - This is a direct executable test script that Heroku specifically looks for
-2. **tox.ini** - Standard Python test configuration file
-3. **pytest.toml** - Alternative pytest configuration
-4. **heroku.yml** - Container definition with test override
+Heroku CI is not detecting your test files, which is why you're seeing this error:
 
-## How to Fix This in Your Heroku Pipeline
+```
+Unable to run test with performance-m dynos. Using standard-2x instead.
+An error occurred: Unable to detect any runnable tests
+```
 
-### Option 1: Disable CI Tests in Heroku Pipeline (Simplest)
+## The Solution
 
-1. Go to your Heroku Pipeline
-2. Click on "Settings"
-3. Find the "Test Settings" section
-4. Disable "Run CI on every push to this pipeline"
+I've created an `app.ci` file that explicitly tells Heroku CI how to run your tests. This file configures:
 
-This bypasses the CI test issues completely while preserving your deployment.
+1. The PostgreSQL database for testing
+2. Environment variables for the test environment
+3. Explicitly defines the test command to run
+4. Sets the dyno size to standard-2x
 
-### Option 2: Configure Tests to Always Pass
+## Steps to Fix
 
-1. Make sure the executable **bin/test** script is included in your repository
-2. Manually configure your Heroku Pipeline to use the standard-2x dyno:
+1. Make sure this `app.ci` file is included in your deployment package
+2. The file specifies to use the TAP output format for pytest
+3. Ensure your tests are in the appropriate structure (which we've already set up)
 
-   ```
-   heroku ci:config:set -p your-pipeline HEROKU_CI_DYNO_SIZE=standard-2x
-   ```
+## How to Verify Tests Locally
 
-3. Run a test manually:
+Before pushing to Heroku CI, verify your tests work locally:
 
-   ```
-   heroku ci:run --pipeline=your-pipeline
-   ```
+```bash
+# Run all tests
+./run_tap_tests.py
 
-## For Complete Testing Setup
+# Run only unit tests
+./run_tap_tests.py --unit
 
-To implement a proper CI/CD pipeline with testing, I recommend:
+# Run only integration tests
+./run_tap_tests.py --integration
+```
 
-1. **Use GitHub Actions** instead of Heroku CI:
-   - We've already created the `.github/workflows/heroku.yml` file
-   - This runs tests and deploys to Heroku in one workflow
-   - Less prone to Heroku CI-specific issues
+## Common Test Failures in CI
 
-2. **Use CircleCI** as another alternative:
-   - We've created the `.circleci/config.yml` file
-   - Connect your GitHub repo to CircleCI for automatic builds
+If tests pass locally but fail in CI, check for:
 
-## What's the Problem with Heroku CI?
+1. **Database connection issues**: CI uses a fresh database
+2. **Environment variables**: Make sure required variables are set in the app.ci file
+3. **Path differences**: CI runs in a different directory
+4. **Timing issues**: CI might have different timing constraints
 
-Heroku CI is specifically looking for either:
-1. A `bin/test` executable file
-2. A test-entry in `package.json` for Node.js apps
-3. A test runner specified in `app.json`
+## Additional CI Configuration
 
-We've provided all three, but sometimes Heroku CI still has issues with Python test detection. The manual options above will get your app deployed regardless of CI test status.
+You can further customize your CI pipeline by adding scripts to be run at different phases:
+
+```
+{
+  "environments": {
+    "test": {
+      "scripts": {
+        "test-setup": "python setup_test_data.py",
+        "test": "python -m pytest",
+        "test-teardown": "python cleanup_test_data.py"
+      }
+    }
+  }
+}
+```
+
+This structure allows for setup before tests and cleanup afterward.
+
+## After Fixing CI Tests
+
+Once your tests are running properly in CI, you can leverage the TAP output in your deployment workflow by:
+
+1. Setting up a GitHub Action to display test results
+2. Using the test results to gate deployments
+3. Generating test coverage reports

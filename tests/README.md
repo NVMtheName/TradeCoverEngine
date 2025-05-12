@@ -1,51 +1,66 @@
-# Testing Framework
+# Trading Bot Test Suite
 
-This project uses pytest with TAP (Test Anything Protocol) output for standardized test reporting.
+This directory contains tests for the Trading Bot application, structured to use the Test Anything Protocol (TAP) for reporting.
 
-## Structure
+## Directory Structure
 
-- `tests/unit/`: Unit tests for individual components
-- `tests/integration/`: Integration tests that test multiple components together
-- `conftest.py`: Shared pytest fixtures and configuration
-- `pytest.ini`: Configuration for pytest and TAP output
+- `unit/`: Contains unit tests for individual components
+  - `test_utils.py`: Tests for utility functions
+  
+- `integration/`: Contains integration tests spanning multiple components
+  - `test_routes.py`: Tests for Flask routes and views
+  - `test_database.py`: Tests for database models and relationships
+
+- `conftest.py`: Pytest configuration and fixtures
 
 ## Running Tests
 
-To run all tests with TAP output:
+You can run tests using the included `run_tap_tests.py` script:
 
 ```bash
-python -m pytest
+# Run all tests
+./run_tap_tests.py
+
+# Run only unit tests
+./run_tap_tests.py --unit
+
+# Run only integration tests
+./run_tap_tests.py --integration
 ```
 
-The test output will be saved in TAP format in the `test_results` directory.
+Or you can use pytest directly:
+
+```bash
+# Run all tests with TAP output
+python -m pytest --tap-files --tap-combined --tap-outdir=test_results
+
+# Run specific test file
+python -m pytest tests/unit/test_utils.py --tap-files
+```
 
 ## TAP Output
 
-TAP (Test Anything Protocol) is a simple text-based interface between testing modules. It provides a standardized way to report test results that can be easily parsed by other tools.
+Test results are written to the `test_results/` directory in TAP format. The main output file is `testresults.tap`, which contains combined results from all tests.
 
-Example TAP output:
-```
-TAP version 13
-1..3
-ok 1 - test_calculate_annualized_return
-ok 2 - test_format_currency
-ok 3 - test_format_percentage
-```
+## CI Integration
 
-## Continuous Integration
+These tests are configured to run in Heroku CI using the configuration in `app.ci` at the project root. The CI environment:
 
-GitHub Actions is configured to run tests automatically on pushes to main and develop branches, as well as on pull requests to main. The workflow is defined in `.github/workflows/test_with_tap.yml`.
+1. Sets up a PostgreSQL database for testing
+2. Sets the appropriate environment variables
+3. Runs the tests with TAP output
+4. Collects the test results
 
-## Adding New Tests
+## Writing New Tests
 
-1. For unit tests, add test files to `tests/unit/`.
-2. For integration tests, add test files to `tests/integration/`.
-3. Follow the naming convention: `test_*.py` for files, `test_*` for functions.
-4. Run your tests to ensure they generate valid TAP output.
+When adding new tests:
 
-## Best Practices
+1. Follow the existing structure (unit or integration)
+2. Use the fixtures defined in `conftest.py`
+3. Write clear, descriptive test functions
+4. Use assertions to verify expected behavior
+5. Add appropriate docstrings to explain what each test does
 
-1. Keep unit tests isolated - they should not depend on external services.
-2. Use fixtures from `conftest.py` to share setup code.
-3. For database tests, use the in-memory SQLite database.
-4. Always clean up after tests to avoid affecting other tests.
+## Database Testing
+
+Database tests use an in-memory SQLite database by default. In CI, they use a PostgreSQL database. The database is reset between test functions to ensure test isolation.

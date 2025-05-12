@@ -1,16 +1,25 @@
-test:
-  description: Basic testing using pytest
-  formation:
-    test:
-      quantity: 1
-      size: standard-2x
-  addons:
-    - plan: heroku-postgresql:mini
-      as: DATABASE
-  scripts:
-    test:
-      - python -m pytest || echo "Test exit code: $?"
-    setup:
-      - pip install pytest
-  env:
-    FLASK_ENV: test
+{
+  "environments": [
+    {
+      "test": {
+        "addons": [
+          "heroku-postgresql:in-dyno"
+        ],
+        "env": {
+          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/heroku_ci_db",
+          "FLASK_ENV": "testing",
+          "FLASK_DEBUG": "1"
+        },
+        "scripts": {
+          "test": "python -m pytest --tap-files --tap-combined --tap-outdir=test_results"
+        },
+        "formation": {
+          "test": {
+            "size": "standard-2x",
+            "quantity": 1
+          }
+        }
+      }
+    }
+  ]
+}

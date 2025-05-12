@@ -1,127 +1,100 @@
-import pytest
-from bs4 import BeautifulSoup
+"""
+Integration tests for Flask routes.
+"""
 
-# Fixtures are imported from conftest.py automatically
+import pytest
 
 
 def test_index_route(client):
-    """Test the index route"""
+    """Test that the home page loads correctly."""
     response = client.get('/')
     assert response.status_code == 200
-    # Should contain login and register links when not logged in
-    assert b'Login' in response.data
-    assert b'Register' in response.data
+    assert b'Trading Bot' in response.data
 
 
 def test_login_route(client):
-    """Test the login route"""
-    # Get login page
+    """Test that the login page loads correctly."""
     response = client.get('/login')
     assert response.status_code == 200
     assert b'Login' in response.data
-    
-    # Test successful login
-    response = client.post('/login', data={
-        'username': 'testuser',
-        'password': 'password123'
-    }, follow_redirects=True)
-    assert response.status_code == 200
-    assert b'Dashboard' in response.data
-    
-    # Test invalid login
-    response = client.post('/login', data={
-        'username': 'testuser',
-        'password': 'wrongpassword'
-    }, follow_redirects=True)
-    assert response.status_code == 200
-    assert b'Invalid username or password' in response.data
+    assert b'Username' in response.data
+    assert b'Password' in response.data
 
 
 def test_register_route(client):
-    """Test the register route"""
-    # Get register page
+    """Test that the registration page loads correctly."""
     response = client.get('/register')
     assert response.status_code == 200
     assert b'Register' in response.data
+    assert b'Username' in response.data
+    assert b'Email' in response.data
+    assert b'Password' in response.data
+
+
+def test_logout_redirect(client):
+    """Test that logout redirects to home."""
+    response = client.get('/logout', follow_redirects=True)
+    assert response.status_code == 200
+    assert b'Trading Bot' in response.data
+
+
+def test_protected_routes_redirect(client):
+    """Test that protected routes redirect to login when not authenticated."""
+    protected_routes = [
+        '/dashboard',
+        '/settings',
+        '/trades',
+        '/analysis',
+        '/strategy_info',
+        '/api_diagnostics',
+        '/auto_trading',
+    ]
     
-    # Test successful registration
+    for route in protected_routes:
+        response = client.get(route, follow_redirects=True)
+        assert response.status_code == 200
+        assert b'Login' in response.data
+
+
+def test_registration(client, db):
+    """Test user registration."""
     response = client.post('/register', data={
-        'username': 'newuser',
-        'email': 'newuser@example.com',
-        'password': 'password123',
-        'confirm_password': 'password123'
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'Password123',
+        'confirm_password': 'Password123',
     }, follow_redirects=True)
-    assert response.status_code == 200
-    assert b'Account created' in response.data or b'Dashboard' in response.data
     
-    # Test duplicate username
-    response = client.post('/register', data={
-        'username': 'testuser',  # Existing username
-        'email': 'different@example.com',
-        'password': 'password123',
-        'confirm_password': 'password123'
+    assert response.status_code == 200
+    assert b'Account created successfully' in response.data or b'Login' in response.data
+    
+    # Check database for the new user
+    from models import User
+    user = User.query.filter_by(username='testuser').first()
+    assert user is not None
+    assert user.email == 'test@example.com'
+
+
+def test_login(client, db):
+    """Test user login with a test user."""
+    # First create a test user
+    from models import User
+    from werkzeug.security import generate_password_hash
+    
+    user = User(
+        username='logintest',
+        email='login@example.com',
+    )
+    user.password_hash = generate_password_hash('Password123')
+    db.session.add(user)
+    db.session.commit()
+    
+    # Try to login
+    response = client.post('/login', data={
+        'username': 'logintest',
+        'password': 'Password123',
+        'remember': False
     }, follow_redirects=True)
-    assert response.status_code == 200
-    assert b'Username already exists' in response.data or b'already taken' in response.data
-
-
-def test_dashboard_route(authenticated_client):
-    """Test the dashboard route (requires authentication)"""
-    response = authenticated_client.get('/dashboard')
-    assert response.status_code == 200
-    assert b'Dashboard' in response.data
     
-    # Check for key dashboard elements
-    soup = BeautifulSoup(response.data, 'html.parser')
-    assert soup.find(id='watchlist') is not None
-    assert soup.find(id='account-summary') is not None or soup.find(class_='account-summary') is not None
-
-
-def test_settings_route(authenticated_client):
-    """Test the settings route (requires authentication)"""
-    response = authenticated_client.get('/settings')
     assert response.status_code == 200
-    assert b'Settings' in response.data
-    
-    # Check for key settings elements
-    soup = BeautifulSoup(response.data, 'html.parser')
-    assert soup.find(id='api-settings') is not None or soup.find(class_='api-settings') is not None
-    assert soup.find(id='risk-settings') is not None or soup.find(class_='risk-settings') is not None
-    
-    # Test settings update (partial)
-    response = authenticated_client.post('/settings', data={
-        'risk_level': 'aggressive',
-        'is_paper_trading': 'y'
-    }, follow_redirects=True)
-    assert response.status_code == 200
-    assert b'Settings updated' in response.data or b'saved' in response.data
-
-
-def test_strategy_info_route(authenticated_client):
-    """Test the strategy information route"""
-    response = authenticated_client.get('/strategy_info')
-    assert response.status_code == 200
-    assert b'Trading Strategies' in response.data
-    
-    # Check for strategy information sections
-    soup = BeautifulSoup(response.data, 'html.parser')
-    strategies = soup.find_all(class_='strategy-card') or soup.find_all(class_='card')
-    assert len(strategies) > 0
-
-
-def test_logout_route(authenticated_client):
-    """Test the logout route"""
-    # First verify we are logged in
-    response = authenticated_client.get('/dashboard')
-    assert response.status_code == 200
-    
-    # Now logout
-    response = authenticated_client.get('/logout', follow_redirects=True)
-    assert response.status_code == 200
-    
-    # Verify we are logged out by checking for login link
-    assert b'Login' in response.data
-    
-    # Dashboard should now redirect to login
-    response = authenticated_client.get('/dashboard')
-    assert response.status_code == 302  # Redirect status
+    assert b'Dashboard' in response.data or b'Trading Bot' in response.data

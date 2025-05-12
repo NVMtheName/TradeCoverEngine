@@ -1,149 +1,162 @@
-import os
-import sys
-import unittest
-from datetime import datetime, timedelta
+"""
+Integration tests for database models.
+"""
 
-# Add parent directory to path to import modules correctly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
-# Import the database app context and models
-# Use literal imports for all models to avoid any LSP issues
-from app import app, db
-from werkzeug.security import generate_password_hash
-import models
+import pytest
+from models import User, Settings, Trade, WatchlistItem
 
 
-class TestDatabaseIntegration(unittest.TestCase):
-    """Test database models and relationships"""
+def test_user_model(db):
+    """Test User model creation and querying."""
+    # Create a new user
+    user = User(
+        username='dbtest',
+        email='db@example.com',
+    )
+    user.set_password('Password123')
     
-    def setUp(self):
-        """Set up test environment"""
-        # Use an in-memory SQLite database for testing
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-        self.app_context = app.app_context()
-        self.app_context.push()
-        db.create_all()
-        
-        # Create a test user
-        self.test_user = models.User()
-        self.test_user.username = 'testuser'
-        self.test_user.email = 'testuser@example.com'
-        self.test_user.password_hash = generate_password_hash('password123')
-        db.session.add(self.test_user)
-        db.session.commit()
+    # Add to database
+    db.session.add(user)
+    db.session.commit()
     
-    def tearDown(self):
-        """Clean up after tests"""
-        db.session.remove()
-        db.drop_all()
-        self.app_context.pop()
-    
-    def test_user_creation(self):
-        """Test user creation and password hashing"""
-        # User should exist in database
-        user = models.User.query.filter_by(username='testuser').first()
-        self.assertIsNotNone(user)
-        self.assertEqual(user.email, 'testuser@example.com')
-        
-        # Password should be hashed and not stored in plaintext
-        self.assertNotEqual(user.password_hash, 'password123')
-        
-        # We'll use the check_password method from the model
-        from werkzeug.security import check_password_hash
-        self.assertTrue(check_password_hash(user.password_hash, 'password123'))
-        self.assertFalse(check_password_hash(user.password_hash, 'wrongpassword'))
-    
-    def test_settings_relationship(self):
-        """Test user-settings relationship"""
-        # Create settings for the test user
-        settings = models.Settings()
-        settings.user_id = self.test_user.id
-        settings.api_provider = 'schwab'
-        settings.risk_level = 'moderate'
-        settings.is_paper_trading = True
-        db.session.add(settings)
-        db.session.commit()
-        
-        # Settings should be associated with the user
-        user_settings = models.Settings.query.filter_by(user_id=self.test_user.id).first()
-        self.assertIsNotNone(user_settings)
-        self.assertEqual(user_settings.api_provider, 'schwab')
-        self.assertEqual(user_settings.risk_level, 'moderate')
-        self.assertTrue(user_settings.is_paper_trading)
-    
-    def test_trades_relationship(self):
-        """Test user-trades relationship"""
-        # Create trades for the test user
-        trade1 = models.Trade()
-        trade1.user_id = self.test_user.id
-        trade1.symbol = 'AAPL'
-        trade1.trade_type = 'BUY_STOCK'
-        trade1.quantity = 10
-        trade1.price = 150.0
-        trade1.status = 'OPEN'
-        trade1.timestamp = datetime.now()
-        
-        trade2 = models.Trade()
-        trade2.user_id = self.test_user.id
-        trade2.symbol = 'MSFT'
-        trade2.trade_type = 'COVERED_CALL'
-        trade2.quantity = 5
-        trade2.price = 250.0
-        trade2.option_strike = 260.0
-        trade2.option_expiry = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-        trade2.status = 'OPEN'
-        trade2.timestamp = datetime.now()
-        
-        db.session.add_all([trade1, trade2])
-        db.session.commit()
-        
-        # Query trades by user ID
-        user_trades = models.Trade.query.filter_by(user_id=self.test_user.id).all()
-        self.assertEqual(len(user_trades), 2)
-        
-        # Sort by symbol to make sure the test is deterministic
-        user_trades.sort(key=lambda t: t.symbol)
-        self.assertEqual(user_trades[0].symbol, 'AAPL')
-        self.assertEqual(user_trades[1].symbol, 'MSFT')
-        
-        # Test trade querying
-        open_trades = models.Trade.query.filter_by(status='OPEN').all()
-        self.assertEqual(len(open_trades), 2)
-        
-        apple_trades = models.Trade.query.filter_by(symbol='AAPL').all()
-        self.assertEqual(len(apple_trades), 1)
-        self.assertEqual(apple_trades[0].quantity, 10)
-    
-    def test_watchlist_relationship(self):
-        """Test user-watchlist relationship"""
-        # Create watchlist items for the test user
-        watchlist1 = models.WatchlistItem()
-        watchlist1.user_id = self.test_user.id
-        watchlist1.symbol = 'AAPL'
-        watchlist1.notes = 'Potential covered call candidate'
-        
-        watchlist2 = models.WatchlistItem()
-        watchlist2.user_id = self.test_user.id
-        watchlist2.symbol = 'TSLA'
-        watchlist2.notes = 'High IV for options'
-        
-        db.session.add_all([watchlist1, watchlist2])
-        db.session.commit()
-        
-        # Query watchlist items by user ID
-        user_watchlist = models.WatchlistItem.query.filter_by(user_id=self.test_user.id).all()
-        self.assertEqual(len(user_watchlist), 2)
-        
-        # Sort by symbol to make the test deterministic
-        user_watchlist.sort(key=lambda w: w.symbol)
-        self.assertEqual(user_watchlist[0].symbol, 'AAPL')
-        self.assertEqual(user_watchlist[1].symbol, 'TSLA')
-        
-        # Test watchlist querying
-        apple_item = models.WatchlistItem.query.filter_by(symbol='AAPL').first()
-        self.assertIsNotNone(apple_item)
-        self.assertEqual(apple_item.notes, 'Potential covered call candidate')
+    # Query the user
+    queried_user = User.query.filter_by(username='dbtest').first()
+    assert queried_user is not None
+    assert queried_user.email == 'db@example.com'
+    assert queried_user.check_password('Password123')
+    assert not queried_user.check_password('WrongPassword')
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_settings_model(db):
+    """Test Settings model creation and relationship to User."""
+    # Create a new user
+    user = User(
+        username='settingstest',
+        email='settings@example.com',
+    )
+    user.set_password('Password123')
+    db.session.add(user)
+    db.session.commit()
+    
+    # Create settings for the user
+    settings = Settings(
+        user_id=user.id,
+        api_provider='schwab',
+        risk_level='moderate',
+        is_paper_trading=True,
+    )
+    db.session.add(settings)
+    db.session.commit()
+    
+    # Query the settings
+    queried_settings = Settings.query.filter_by(user_id=user.id).first()
+    assert queried_settings is not None
+    assert queried_settings.api_provider == 'schwab'
+    assert queried_settings.risk_level == 'moderate'
+    assert queried_settings.is_paper_trading is True
+    
+    # Test relationship
+    assert queried_settings.user.username == 'settingstest'
+
+
+def test_trade_model(db):
+    """Test Trade model creation and relationship to User."""
+    # Create a new user
+    user = User(
+        username='tradetest',
+        email='trade@example.com',
+    )
+    user.set_password('Password123')
+    db.session.add(user)
+    db.session.commit()
+    
+    # Create a trade for the user
+    trade = Trade(
+        user_id=user.id,
+        symbol='AAPL',
+        trade_type='BUY_STOCK',
+        quantity=10,
+        price=150.0,
+        status='OPEN',
+    )
+    db.session.add(trade)
+    db.session.commit()
+    
+    # Query the trade
+    queried_trade = Trade.query.filter_by(user_id=user.id).first()
+    assert queried_trade is not None
+    assert queried_trade.symbol == 'AAPL'
+    assert queried_trade.trade_type == 'BUY_STOCK'
+    assert queried_trade.quantity == 10
+    assert queried_trade.price == 150.0
+    assert queried_trade.status == 'OPEN'
+    
+    # Test relationship
+    assert queried_trade.user.username == 'tradetest'
+
+
+def test_watchlist_item_model(db):
+    """Test WatchlistItem model creation and relationship to User."""
+    # Create a new user
+    user = User(
+        username='watchlisttest',
+        email='watchlist@example.com',
+    )
+    user.set_password('Password123')
+    db.session.add(user)
+    db.session.commit()
+    
+    # Create a watchlist item for the user
+    watchlist_item = WatchlistItem(
+        user_id=user.id,
+        symbol='MSFT',
+        notes='Potential covered call candidate',
+    )
+    db.session.add(watchlist_item)
+    db.session.commit()
+    
+    # Query the watchlist item
+    queried_item = WatchlistItem.query.filter_by(user_id=user.id).first()
+    assert queried_item is not None
+    assert queried_item.symbol == 'MSFT'
+    assert queried_item.notes == 'Potential covered call candidate'
+    
+    # Test relationship
+    assert queried_item.user.username == 'watchlisttest'
+
+
+def test_user_relationships(db):
+    """Test User relationships to other models."""
+    # Create a new user
+    user = User(
+        username='relationtest',
+        email='relation@example.com',
+    )
+    user.set_password('Password123')
+    db.session.add(user)
+    db.session.commit()
+    
+    # Create settings, trades, and watchlist items
+    settings = Settings(user_id=user.id, api_provider='schwab')
+    trade1 = Trade(user_id=user.id, symbol='AAPL', trade_type='BUY_STOCK', quantity=10, price=150.0)
+    trade2 = Trade(user_id=user.id, symbol='MSFT', trade_type='BUY_STOCK', quantity=5, price=250.0)
+    watchlist1 = WatchlistItem(user_id=user.id, symbol='GOOG')
+    watchlist2 = WatchlistItem(user_id=user.id, symbol='AMZN')
+    
+    db.session.add_all([settings, trade1, trade2, watchlist1, watchlist2])
+    db.session.commit()
+    
+    # Query the user
+    queried_user = User.query.filter_by(username='relationtest').first()
+    
+    # Test relationships
+    assert len(queried_user.settings) == 1
+    assert queried_user.settings[0].api_provider == 'schwab'
+    
+    assert len(queried_user.trades) == 2
+    assert queried_user.trades[0].symbol in ['AAPL', 'MSFT']
+    assert queried_user.trades[1].symbol in ['AAPL', 'MSFT']
+    
+    assert len(queried_user.watchlist_items) == 2
+    assert queried_user.watchlist_items[0].symbol in ['GOOG', 'AMZN']
+    assert queried_user.watchlist_items[1].symbol in ['GOOG', 'AMZN']
