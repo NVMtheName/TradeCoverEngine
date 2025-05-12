@@ -1,0 +1,6 @@
+build:
+  languages:
+    python: "3.9.13"
+
+run:
+  web: gunicorn main:app

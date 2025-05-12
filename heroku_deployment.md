@@ -4,7 +4,7 @@ This guide covers everything you need to deploy your trading bot to Heroku with 
 
 ## Step 1: Required Files for Heroku
 
-Create these files in your project root:
+You need these files in your project root (most of which I've already created):
 
 ### Procfile
 ```
@@ -17,7 +17,9 @@ python-3.9.13
 ```
 
 ### requirements.txt
-Make sure it includes these packages:
+First, **rename requirements-heroku.txt to requirements.txt** since Replit doesn't allow direct editing of requirements.txt.
+
+The requirements should include these packages:
 ```
 flask==2.0.1
 flask-login==0.5.0
@@ -40,6 +42,17 @@ email-validator==1.1.3
 trafilatura==1.4.0
 sqlalchemy==1.4.46
 python-dotenv==0.20.0
+pytest==7.3.1
+```
+
+### heroku.yml (Optional but helpful)
+```yaml
+build:
+  languages:
+    python: "3.9.13"
+
+run:
+  web: gunicorn main:app
 ```
 
 ### proxies.py
