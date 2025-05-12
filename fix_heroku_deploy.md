@@ -1,72 +1,107 @@
-# Fixing Heroku Deployment
+# Fixing Heroku Deployment Issues
 
-This guide has been updated to address the deprecation of Heroku's hobby-dev PostgreSQL plan.
+## The Problem
 
-## Updated PostgreSQL Plan
+Heroku is having trouble deploying your application due to missing package manager files. The error message shows:
 
-Heroku has discontinued the `hobby-dev` PostgreSQL plan. All configurations have been updated to use the new `mini` plan instead.
+```
+Error: Couldn't find any supported Python package manager files.
+```
 
-The following files have been updated:
-- app.json
-- heroku.yml
-- app.ci
-- github_actions_deployment.md
+Heroku is looking for one of these files in the root directory:
+- `requirements.txt`
+- `Pipfile`
+- `poetry.lock`
 
-## Deployment Instructions
+While your repo has a `requirements.txt` file, it seems Heroku isn't detecting it, most likely because:
+1. It might be listed in `.gitignore` or `.slugignore`
+2. It might not have been properly added to your Git repository
+3. There might be case sensitivity issues
 
-To deploy to Heroku with the updated configuration:
+## The Solution
 
-1. Make sure you have the Heroku CLI installed and are logged in.
+### 1. Check Your .gitignore File
 
-2. Create a new Heroku app:
-   ```bash
-   heroku create your-app-name
-   ```
+First, make sure `requirements.txt` isn't listed in your `.gitignore` file:
 
-3. Add the PostgreSQL mini plan:
-   ```bash
-   heroku addons:create heroku-postgresql:mini -a your-app-name
-   ```
+```bash
+grep -i requirements .gitignore
+```
 
-4. Add QuotaGuard Static IP (for Schwab API access):
-   ```bash
-   heroku addons:create quotaguardstatic:starter -a your-app-name
-   ```
+### 2. Ensure requirements.txt is in Git
 
-5. Set required environment variables:
-   ```bash
-   heroku config:set SCHWAB_API_KEY=your_key -a your-app-name
-   heroku config:set SCHWAB_API_SECRET=your_secret -a your-app-name
-   heroku config:set FLASK_ENV=production -a your-app-name
-   ```
+```bash
+git check-ignore requirements.txt
+```
 
-6. Deploy using the Heroku Git remote:
-   ```bash
-   git push heroku main
-   ```
+If no output, then the file isn't being ignored.
 
-## Alternative: Deploying with GitHub Actions
+### 3. Add requirements.txt to Git
 
-We've set up GitHub Actions workflows to handle CI/CD more reliably than Heroku CI. See the `github_actions_deployment.md` file for detailed instructions on setting up GitHub repository secrets and deploying with GitHub Actions.
+```bash
+git add requirements.txt
+git commit -m "Add requirements.txt for Heroku deployment"
+git push heroku main
+```
 
-The main advantages of the GitHub Actions approach:
-- More reliable build process
-- Customizable test environment
-- Ability to deploy with a static IP address
-- Better secret handling
+### 4. Verify Python Version
 
-## Troubleshooting
+Make sure your `runtime.txt` contains a valid Python version that Heroku supports:
 
-If you encounter issues with the PostgreSQL plan, try the following:
+```
+python-3.10.12
+```
 
-1. Check the current available plans:
-   ```bash
-   heroku addons:plans heroku-postgresql
-   ```
+Replace with a supported version from: https://devcenter.heroku.com/articles/python-support#supported-runtimes
 
-2. If you need to upgrade an existing app:
-   ```bash
-   heroku addons:upgrade heroku-postgresql:mini -a your-app-name
-   ```
+### 5. Alternative: Create requirements-heroku.txt
 
-3. If you receive an error about invalid app.json, make sure all files are updated to use the "mini" plan instead of "hobby-dev".
+If you want to keep using uv in development but Heroku doesn't support it, create a special file for Heroku:
+
+```bash
+cp requirements.txt requirements-heroku.txt
+```
+
+Then update your Procfile to use this file:
+
+```
+web: pip install -r requirements-heroku.txt && gunicorn --workers=2 --bind 0.0.0.0:$PORT --timeout 60 main:app
+```
+
+### 6. Last Resort: Use Buildpacks Explicitly
+
+If all else fails, explicitly specify the Python buildpack:
+
+```bash
+heroku buildpacks:set heroku/python
+```
+
+## Additional Heroku Deployment Tips
+
+1. **Environment Variables**: Make sure all required environment variables are set:
+
+```bash
+heroku config:set DATABASE_URL=postgres://...
+heroku config:set FLASK_SECRET_KEY=your_secret_key
+```
+
+2. **Database Migrations**: Run database migrations after deployment:
+
+```bash
+heroku run python migrate_db.py
+```
+
+3. **Check Logs**: If deployment succeeds but the app fails to start:
+
+```bash
+heroku logs --tail
+```
+
+4. **Procfile Settings**: Your optimized Procfile settings should help with performance:
+
+```
+web: gunicorn --workers=2 --bind 0.0.0.0:$PORT --timeout 60 main:app
+release: python -c "from app import app, db; app.app_context().push(); db.create_all()"
+```
+
+These changes ensure database tables are created automatically during deployment.
