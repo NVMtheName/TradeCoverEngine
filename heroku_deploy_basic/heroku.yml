@@ -1,0 +1,11 @@
+build:
+  languages:
+    python: "3.10.12"
+
+setup:
+  addons:
+    - plan: heroku-postgresql:mini
+      as: DATABASE
+
+run:
+  web: gunicorn --workers=2 --bind 0.0.0.0:$PORT --timeout 60 main:app
