@@ -85,65 +85,87 @@ EXCLUDE_PATTERNS = [
 
 # Additional files to create or modify
 ADDITIONAL_FILES = {
-    'README_HEROKU.md': """# Trading Bot - Heroku Deployment
+    'README_HEROKU.md': """# Trading Bot - GitHub to Heroku Deployment
 
 This package contains a ready-to-deploy version of the Trading Bot application for Heroku.
 
-## Super Easy Deployment (No Python Experience Needed)
+## SUPER EASY GITHUB DEPLOYMENT (EASIEST OPTION)
 
 1. **Create a Heroku Account**:
-   Go to https://signup.heroku.com/ and create a free account if you don't already have one.
+   Go to https://signup.heroku.com/ and create a free account
 
-2. **Install the Heroku CLI**:
-   Download and install from https://devcenter.heroku.com/articles/heroku-cli
+2. **Create a GitHub Account**:
+   Go to https://github.com/join if you don't already have one
 
-3. **Extract this ZIP file** to a folder on your computer.
+3. **Deploy from GitHub**:
 
-4. **Open Command Prompt or Terminal**:
-   - On Windows: Press Win+R, type "cmd" and press Enter
-   - On Mac: Open Terminal from Applications > Utilities
+   a. Upload this entire folder to a GitHub repository:
+      - Create a new repository on GitHub
+      - Upload all these files (drag and drop in the GitHub web interface)
+   
+   b. Connect to Heroku:
+      - Go to https://dashboard.heroku.com/
+      - Click "New" and "Create new app"
+      - Give your app a name and click "Create app"
+      
+   c. Connect to GitHub:
+      - In your Heroku app, go to the "Deploy" tab
+      - Select "GitHub" in the "Deployment method" section
+      - Connect your GitHub account
+      - Search for and select your repository
+      
+   d. Set up automatic deploys:
+      - Scroll down to "Automatic deploys"
+      - Click "Enable Automatic Deploys"
+      
+   e. Perform manual deploy:
+      - Scroll to "Manual deploy"
+      - Click "Deploy Branch"
 
-5. **Navigate to the extracted folder**:
-   ```
-   cd path/to/extracted/folder
-   ```
+   f. Set up database:
+      - Go to "Resources" tab
+      - Click "Find more add-ons"
+      - Find "Heroku Postgres" and select "Mini" plan
+      - Click "Submit Order Form"
 
-6. **Run the deployment helper script**:
-   ```
-   deploy_to_heroku.bat    (on Windows)
-   ```
-   or
-   ```
-   ./deploy_to_heroku.sh   (on Mac/Linux)
-   ```
+   g. Initialize database:
+      - Go to "More" button (top right) and select "Run console"
+      - Type `python migrate_db.py` and click "Run"
 
-7. **Follow the prompts** in the script - it will:
-   - Log you into Heroku
-   - Create your app
-   - Set up the database
-   - Deploy the application
-   - Run database migrations
-   - Open your app in a browser
+4. **Set up API Keys**:
+   - Go to "Settings" tab
+   - Click "Reveal Config Vars"
+   - Add your API keys:
+     - Key: `SCHWAB_API_KEY` / Value: your_key_here
+     - Key: `SCHWAB_API_SECRET` / Value: your_secret_here
+     - Key: `OPENAI_API_KEY` / Value: your_openai_key_here
 
-## Configuring API Keys (After Deployment)
+5. **Open Your App**:
+   - Click "Open app" button at the top right
 
-After your app is running, you'll need to set up your API keys:
-```
-heroku config:set SCHWAB_API_KEY=your_key_here
-heroku config:set SCHWAB_API_SECRET=your_secret_here
-heroku config:set OPENAI_API_KEY=your_openai_key_here
-```
+That's it! No command line, no scripts, just click-and-deploy!
+
+## ULTRA-EASY ONE-CLICK DEPLOYMENT
+
+If your GitHub repository is already set up, you can use the "Deploy to Heroku" button below to deploy with a single click:
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
+This button will:
+1. Create a new Heroku app
+2. Set up the required buildpacks
+3. Create a PostgreSQL database
+4. Initialize the database
+5. Prompt you for API keys
+6. Deploy your application
 
 ## Troubleshooting
 
-- **Database issues**: 
-  Run `heroku pg:info` to check database status.
-  
-- **Application errors**: 
-  Check logs with `heroku logs --tail`
+- **Application errors**:
+  Go to "More" button, select "View logs"
 
-- **Deployment failures**: 
-  Ensure you have the correct buildpacks with `heroku buildpacks`
+- **Need to update your app**?
+  Just make changes on GitHub and they will deploy automatically!
   
 ## Additional Resources
 
@@ -151,37 +173,45 @@ heroku config:set OPENAI_API_KEY=your_openai_key_here
 - Heroku PostgreSQL: https://devcenter.heroku.com/articles/heroku-postgresql
 """,
 
-    'DEPLOY.md': """# Super Quick Deployment Guide
+    'DEPLOY.md': """# Trading Bot Deployment - Easiest Options
 
-## One-Click Deployment:
+## OPTION 1: ONE-CLICK DEPLOY
 
-1. Extract all files from this zip package
-2. Double-click:
-   - `deploy_to_heroku.bat` (on Windows)
-   - `deploy_to_heroku.sh` (on Mac/Linux)
-3. Follow the on-screen prompts
+Just click the button below:
 
-That's it! The script will handle everything else for you.
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
 
-## What the Script Does:
+Follow the prompts to set up your app.
 
-1. Checks if Heroku CLI is installed (guides you to install if needed)
-2. Logs you into Heroku
-3. Creates your app 
-4. Sets up PostgreSQL database
-5. Initializes Git repository
-6. Deploys the application
-7. Runs database migrations
-8. Opens your app in a browser
+## OPTION 2: GITHUB + HEROKU
 
-## After Deployment:
+1. Upload this folder to GitHub:
+   - Create a repository at github.com
+   - Upload all files using drag & drop in your browser
+   
+2. Connect to Heroku:
+   - Go to dashboard.heroku.com
+   - Create a new app
+   - Go to "Deploy" tab
+   - Select "GitHub" and connect your repository
+   - Click "Enable Automatic Deploys"
+   - Click "Deploy Branch"
+   
+3. Add database:
+   - Go to "Resources" tab
+   - Add "Heroku Postgres" (mini plan)
+   
+4. Initialize database:
+   - Go to "More" → "Run console"
+   - Run: `python migrate_db.py`
+   
+5. Set up API Keys:
+   - Go to "Settings" → "Config Vars"
+   - Add your API keys (SCHWAB_API_KEY, etc.)
+   
+6. Click "Open app" button
 
-Set your API keys:
-```
-heroku config:set SCHWAB_API_KEY=your_key_here
-heroku config:set SCHWAB_API_SECRET=your_secret_here
-heroku config:set OPENAI_API_KEY=your_openai_key_here
-```
+That's it! No command line, no git commands!
 
 For detailed instructions, see README_HEROKU.md
 """,
@@ -563,6 +593,47 @@ def ensure_requirements(target_dir):
     with open(runtime_path, 'w') as runtime_file:
         runtime_file.write('python-3.11.0')
     print("Created runtime.txt to specify Python 3.11.0")
+    
+    # Create app.json for Heroku button
+    app_json_path = os.path.join(target_dir, 'app.json')
+    with open(app_json_path, 'w') as app_json_file:
+        app_json_file.write("""
+{
+  "name": "Trading Bot",
+  "description": "Advanced trading bot with AI-powered analysis and multi-provider API integration",
+  "repository": "https://github.com/yourusername/trading-bot",
+  "logo": "https://raw.githubusercontent.com/yourusername/trading-bot/main/static/img/logo.png",
+  "keywords": ["python", "flask", "trading", "finance", "ai", "schwab"],
+  "addons": ["heroku-postgresql:mini"],
+  "env": {
+    "FLASK_ENV": {
+      "description": "Flask environment",
+      "value": "production"
+    },
+    "SCHWAB_API_KEY": {
+      "description": "Your Charles Schwab API key (client ID)",
+      "required": true
+    },
+    "SCHWAB_API_SECRET": {
+      "description": "Your Charles Schwab API secret (client secret)",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "Your OpenAI API key for AI analysis features",
+      "required": false
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "python migrate_db.py"
+  }
+}
+""")
+    print("Created app.json for Heroku button deployment")
 
 
 def create_zip_package(source_dir, output_dir=None):
