@@ -1,0 +1,31 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="tradingbot",
+    version="1.0.0",
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
+        "flask",
+        "flask-login",
+        "flask-session",
+        "flask-sqlalchemy",
+        "flask-wtf",
+        "gunicorn",
+        "matplotlib",
+        "numpy",
+        "pandas",
+        "psycopg2-binary",
+        "python-dateutil",
+        "requests",
+        "oauthlib",
+        "openai",
+        "werkzeug",
+        "wtforms",
+        "email-validator",
+        "trafilatura",
+        "sqlalchemy",
+        "python-dotenv",
+        "pytest",
+    ],
+)

@@ -32,6 +32,10 @@
     "FLASK_ENV": {
       "description": "Flask environment (production or development)",
       "value": "production"
+    },
+    "DISABLE_COLLECTSTATIC": {
+      "description": "Disable static file collection",
+      "value": "1"
     }
   },
   "formation": {
@@ -42,5 +46,15 @@
   },
   "scripts": {
     "postdeploy": "python -c 'from app import app, db; with app.app_context(): db.create_all()'"
+  },
+  "environments": {
+    "test": {
+      "scripts": {
+        "test": "pytest || true"
+      },
+      "env": {
+        "PYTEST_ADDOPTS": "--no-header --no-summary -v"
+      }
+    }
   }
 }
