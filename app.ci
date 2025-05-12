@@ -1,25 +1,24 @@
 {
-  "environments": [
-    {
-      "test": {
-        "addons": [
-          "heroku-postgresql:in-dyno"
-        ],
-        "env": {
-          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/heroku_ci_db",
-          "FLASK_ENV": "testing",
-          "FLASK_DEBUG": "1"
-        },
-        "scripts": {
-          "test": "python -m pytest --tap-files --tap-combined --tap-outdir=test_results"
-        },
-        "formation": {
-          "test": {
-            "size": "standard-2x",
-            "quantity": 1
-          }
+  "environments": {
+    "test": {
+      "addons": [
+        "heroku-postgresql:in-dyno"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/heroku_ci_db",
+        "FLASK_ENV": "testing",
+        "FLASK_DEBUG": "1"
+      },
+      "scripts": {
+        "test-setup": "pip install -r requirements.txt",
+        "test": "python heroku_test_runner.py"
+      },
+      "formation": {
+        "test": {
+          "size": "standard-2x",
+          "quantity": 1
         }
       }
     }
-  ]
+  }
 }
