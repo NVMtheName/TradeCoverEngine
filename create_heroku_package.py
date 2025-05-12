@@ -63,6 +63,10 @@ REQUIRED_FILES = [
     'requirements.txt',
     'requirements-heroku.txt',
     'fixed_requirements.txt',
+    
+    # App-specific configuration and scripts
+    'app.json',
+    'pyproject.toml',
 ]
 
 # Files to exclude even if they're in subdirectories of included directories
@@ -85,47 +89,50 @@ ADDITIONAL_FILES = {
 
 This package contains a ready-to-deploy version of the Trading Bot application for Heroku.
 
-## Deployment Instructions
+## Super Easy Deployment (No Python Experience Needed)
 
-1. **Install the Heroku CLI** (if you haven't already):
-   Follow instructions at https://devcenter.heroku.com/articles/heroku-cli
+1. **Create a Heroku Account**:
+   Go to https://signup.heroku.com/ and create a free account if you don't already have one.
 
-2. **Log in to Heroku**:
-   ```
-   heroku login
-   ```
+2. **Install the Heroku CLI**:
+   Download and install from https://devcenter.heroku.com/articles/heroku-cli
 
-3. **Create a new Heroku app** (or use an existing one):
-   ```
-   heroku create your-app-name
-   ```
+3. **Extract this ZIP file** to a folder on your computer.
 
-4. **Add a PostgreSQL database**:
-   ```
-   heroku addons:create heroku-postgresql:mini
-   ```
+4. **Open Command Prompt or Terminal**:
+   - On Windows: Press Win+R, type "cmd" and press Enter
+   - On Mac: Open Terminal from Applications > Utilities
 
-5. **Configure environment variables**:
+5. **Navigate to the extracted folder**:
    ```
-   heroku config:set FLASK_ENV=production
-   heroku config:set SCHWAB_API_KEY=your_key_here
-   heroku config:set SCHWAB_API_SECRET=your_secret_here
+   cd path/to/extracted/folder
    ```
 
-6. **Deploy the application**:
+6. **Run the deployment helper script**:
    ```
-   git push heroku main
+   deploy_to_heroku.bat    (on Windows)
+   ```
+   or
+   ```
+   ./deploy_to_heroku.sh   (on Mac/Linux)
    ```
 
-7. **Initialize the database**:
-   ```
-   heroku run python migrate_db.py
-   ```
+7. **Follow the prompts** in the script - it will:
+   - Log you into Heroku
+   - Create your app
+   - Set up the database
+   - Deploy the application
+   - Run database migrations
+   - Open your app in a browser
 
-8. **Visit your application**:
-   ```
-   heroku open
-   ```
+## Configuring API Keys (After Deployment)
+
+After your app is running, you'll need to set up your API keys:
+```
+heroku config:set SCHWAB_API_KEY=your_key_here
+heroku config:set SCHWAB_API_SECRET=your_secret_here
+heroku config:set OPENAI_API_KEY=your_openai_key_here
+```
 
 ## Troubleshooting
 
@@ -138,42 +145,38 @@ This package contains a ready-to-deploy version of the Trading Bot application f
 - **Deployment failures**: 
   Ensure you have the correct buildpacks with `heroku buildpacks`
   
-## Running Tests
-
-This application includes a TAP testing framework. To run tests in Heroku CI:
-
-1. Enable Heroku CI for your application
-2. Push changes to GitHub (if using GitHub integration)
-3. Tests will automatically run using the configuration in app.ci
-
-To run tests locally:
-```
-python run_tap_tests.py
-```
-
 ## Additional Resources
 
 - Heroku Python Support: https://devcenter.heroku.com/articles/python-support
 - Heroku PostgreSQL: https://devcenter.heroku.com/articles/heroku-postgresql
 """,
 
-    'DEPLOY.md': """# Quick Deployment Guide
+    'DEPLOY.md': """# Super Quick Deployment Guide
 
 ## One-Click Deployment:
 
 1. Extract all files from this zip package
-2. Install Heroku CLI
-3. Run: `heroku login`
-4. Run: `heroku create your-app-name`
-5. Run: `heroku addons:create heroku-postgresql:mini`
-6. Run: `git init && git add . && git commit -m "Initial commit"`
-7. Run: `git push heroku main`
-8. Run: `heroku run python migrate_db.py`
-9. Run: `heroku open`
+2. Double-click:
+   - `deploy_to_heroku.bat` (on Windows)
+   - `deploy_to_heroku.sh` (on Mac/Linux)
+3. Follow the on-screen prompts
 
-## Configuring API Keys:
+That's it! The script will handle everything else for you.
 
-After deployment, set your API keys:
+## What the Script Does:
+
+1. Checks if Heroku CLI is installed (guides you to install if needed)
+2. Logs you into Heroku
+3. Creates your app 
+4. Sets up PostgreSQL database
+5. Initializes Git repository
+6. Deploys the application
+7. Runs database migrations
+8. Opens your app in a browser
+
+## After Deployment:
+
+Set your API keys:
 ```
 heroku config:set SCHWAB_API_KEY=your_key_here
 heroku config:set SCHWAB_API_SECRET=your_secret_here
@@ -181,6 +184,263 @@ heroku config:set OPENAI_API_KEY=your_openai_key_here
 ```
 
 For detailed instructions, see README_HEROKU.md
+""",
+
+    'deploy_to_heroku.bat': """@echo off
+echo ===================================
+echo Trading Bot Heroku Deployment Script
+echo ===================================
+echo.
+
+REM Check if Heroku CLI is installed
+heroku --version > nul 2>&1
+if %errorlevel% neq 0 (
+    echo Heroku CLI is not installed!
+    echo Please install it from: https://devcenter.heroku.com/articles/heroku-cli
+    echo After installing, run this script again.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Checking Heroku login status...
+heroku auth:whoami > nul 2>&1
+if %errorlevel% neq 0 (
+    echo Please log in to your Heroku account:
+    heroku login
+    if %errorlevel% neq 0 (
+        echo Failed to log in to Heroku.
+        pause
+        exit /b 1
+    )
+)
+
+echo.
+echo === Step 1: Create Heroku App ===
+set /p app_name=Enter your app name (leave blank for random name): 
+if "%app_name%"=="" (
+    echo Creating Heroku app with random name...
+    heroku create
+) else (
+    echo Creating Heroku app with name: %app_name%...
+    heroku create %app_name%
+)
+if %errorlevel% neq 0 (
+    echo Failed to create Heroku app.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Step 2: Add PostgreSQL Database ===
+echo Adding PostgreSQL database...
+heroku addons:create heroku-postgresql:mini
+if %errorlevel% neq 0 (
+    echo Failed to add PostgreSQL database.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Step 3: Configure Environment ===
+echo Setting environment variables...
+heroku config:set FLASK_ENV=production
+
+echo.
+echo === Step 4: Initialize Git Repository ===
+echo Initializing Git repository...
+if exist .git (
+    echo Git repository already exists.
+) else (
+    git init
+    if %errorlevel% neq 0 (
+        echo Failed to initialize Git repository.
+        pause
+        exit /b 1
+    )
+)
+
+echo Adding files to Git...
+git add .
+git commit -m "Initial commit for Heroku deployment"
+if %errorlevel% neq 0 (
+    echo Failed to commit files to Git.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Step 5: Deploy to Heroku ===
+echo Deploying application to Heroku...
+git push heroku main
+if %errorlevel% neq 0 (
+    echo Trying master branch instead...
+    git push heroku master
+    if %errorlevel% neq 0 (
+        echo Failed to deploy to Heroku.
+        pause
+        exit /b 1
+    )
+)
+
+echo.
+echo === Step 6: Run Database Migrations ===
+echo Running database migrations...
+heroku run python migrate_db.py
+if %errorlevel% neq 0 (
+    echo Failed to run database migrations.
+    pause
+    exit /b 1
+)
+
+echo.
+echo === Step 7: Open Application ===
+echo Opening application in web browser...
+heroku open
+if %errorlevel% neq 0 (
+    echo Failed to open application in browser.
+    pause
+    exit /b 1
+)
+
+echo.
+echo ===================================
+echo Deployment completed successfully!
+echo ===================================
+echo.
+echo IMPORTANT: Don't forget to set your API keys:
+echo heroku config:set SCHWAB_API_KEY=your_key_here
+echo heroku config:set SCHWAB_API_SECRET=your_secret_here
+echo heroku config:set OPENAI_API_KEY=your_openai_key_here
+echo.
+pause
+""",
+
+    'deploy_to_heroku.sh': """#!/bin/bash
+
+echo "==================================="
+echo "Trading Bot Heroku Deployment Script"
+echo "==================================="
+echo
+
+# Check if Heroku CLI is installed
+if ! command -v heroku &> /dev/null; then
+    echo "Heroku CLI is not installed!"
+    echo "Please install it from: https://devcenter.heroku.com/articles/heroku-cli"
+    echo "After installing, run this script again."
+    echo
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo "Checking Heroku login status..."
+if ! heroku auth:whoami &> /dev/null; then
+    echo "Please log in to your Heroku account:"
+    heroku login
+    if [ $? -ne 0 ]; then
+        echo "Failed to log in to Heroku."
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
+fi
+
+echo
+echo "=== Step 1: Create Heroku App ==="
+read -p "Enter your app name (leave blank for random name): " app_name
+if [ -z "$app_name" ]; then
+    echo "Creating Heroku app with random name..."
+    heroku create
+else
+    echo "Creating Heroku app with name: $app_name..."
+    heroku create "$app_name"
+fi
+if [ $? -ne 0 ]; then
+    echo "Failed to create Heroku app."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo
+echo "=== Step 2: Add PostgreSQL Database ==="
+echo "Adding PostgreSQL database..."
+heroku addons:create heroku-postgresql:mini
+if [ $? -ne 0 ]; then
+    echo "Failed to add PostgreSQL database."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo
+echo "=== Step 3: Configure Environment ==="
+echo "Setting environment variables..."
+heroku config:set FLASK_ENV=production
+
+echo
+echo "=== Step 4: Initialize Git Repository ==="
+echo "Initializing Git repository..."
+if [ -d .git ]; then
+    echo "Git repository already exists."
+else
+    git init
+    if [ $? -ne 0 ]; then
+        echo "Failed to initialize Git repository."
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
+fi
+
+echo "Adding files to Git..."
+git add .
+git commit -m "Initial commit for Heroku deployment"
+if [ $? -ne 0 ]; then
+    echo "Failed to commit files to Git."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo
+echo "=== Step 5: Deploy to Heroku ==="
+echo "Deploying application to Heroku..."
+if ! git push heroku main; then
+    echo "Trying master branch instead..."
+    if ! git push heroku master; then
+        echo "Failed to deploy to Heroku."
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
+fi
+
+echo
+echo "=== Step 6: Run Database Migrations ==="
+echo "Running database migrations..."
+heroku run python migrate_db.py
+if [ $? -ne 0 ]; then
+    echo "Failed to run database migrations."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo
+echo "=== Step 7: Open Application ==="
+echo "Opening application in web browser..."
+heroku open
+if [ $? -ne 0 ]; then
+    echo "Failed to open application in browser."
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+echo
+echo "==================================="
+echo "Deployment completed successfully!"
+echo "==================================="
+echo
+echo "IMPORTANT: Don't forget to set your API keys:"
+echo "heroku config:set SCHWAB_API_KEY=your_key_here"
+echo "heroku config:set SCHWAB_API_SECRET=your_secret_here"
+echo "heroku config:set OPENAI_API_KEY=your_openai_key_here"
+echo
+read -p "Press Enter to exit..."
 """,
 
     '.gitignore': """# Python
@@ -297,6 +557,12 @@ def ensure_requirements(target_dir):
             req_file.write(heroku_requirements)
             
         print("Updated requirements.txt with Heroku-specific dependencies")
+        
+    # Create a runtime.txt file to specify Python version
+    runtime_path = os.path.join(target_dir, 'runtime.txt')
+    with open(runtime_path, 'w') as runtime_file:
+        runtime_file.write('python-3.11.0')
+    print("Created runtime.txt to specify Python 3.11.0")
 
 
 def create_zip_package(source_dir, output_dir=None):
