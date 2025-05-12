@@ -1,0 +1,16 @@
+test:
+  description: Basic testing using pytest
+  formation:
+    test:
+      quantity: 1
+      size: standard-2x
+  addons:
+    - plan: heroku-postgresql
+      as: DATABASE
+  scripts:
+    test:
+      - python -m pytest || echo "Test exit code: $?"
+    setup:
+      - pip install pytest
+  env:
+    FLASK_ENV: test

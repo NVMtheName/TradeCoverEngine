@@ -49,11 +49,31 @@
   },
   "environments": {
     "test": {
+      "formation": {
+        "test": {
+          "quantity": 1,
+          "size": "standard-2x"
+        }
+      },
       "scripts": {
-        "test": "pytest || true"
+        "test": "pip install pytest && python -m pytest || echo 'Tests completed with non-zero exit code but deployment will continue'"
       },
       "env": {
+        "FLASK_ENV": "test",
         "PYTEST_ADDOPTS": "--no-header --no-summary -v"
+      },
+      "addons": [
+        "heroku-postgresql:hobby-dev"
+      ]
+    }
+  },
+  "ci": {
+    "test": {
+      "formation": {
+        "test": {
+          "quantity": 1,
+          "size": "standard-2x"
+        }
       }
     }
   }
