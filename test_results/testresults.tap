@@ -1,0 +1,7 @@
+1..5
+# TAP results for tests/unit/test_utils.py
+ok 1 tests/unit/test_utils.py::TestUtils.test_calculate_annualized_return
+ok 2 tests/unit/test_utils.py::TestUtils.test_format_currency
+ok 3 tests/unit/test_utils.py::TestUtils.test_format_percentage
+ok 4 tests/unit/test_utils.py::TestUtils.test_option_symbol_formatting
+ok 5 tests/unit/test_utils.py::TestUtils.test_parse_option_symbol

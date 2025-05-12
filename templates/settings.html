@@ -1,0 +1,798 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings - Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-cog me-2"></i> Settings</h1>
+        <div>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-sliders-h me-2"></i> Bot Configuration
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-4" role="alert">
+                        <h5 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Important Development Environment Note</h5>
+                        <p>When using this application on Replit:</p>
+                        <ul>
+                            <li>Schwab API connections may be blocked as Replit servers aren't whitelisted by Schwab</li>
+                            <li>We recommend enabling "Force Simulation Mode" below for testing</li>
+                            <li>OpenAI API connections may be rate-limited - the application will use fallback AI mode</li>
+                        </ul>
+                        <p class="mb-0">For production use with real Schwab API connections, deploy to a dedicated server with a whitelisted IP.</p>
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('settings') }}" class="settings-form">
+                        <!-- API Connection Settings -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">API Connection</h5>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_provider" class="form-label">Trading Platform</label>
+                                <select class="form-select" id="api_provider" name="api_provider">
+                                    <option value="alpaca" {% if settings.api_provider == 'alpaca' %}selected{% endif %}>Alpaca</option>
+                                    <option value="td_ameritrade" {% if settings.api_provider == 'td_ameritrade' %}selected{% endif %}>TD Ameritrade</option>
+                                    <option value="schwab" {% if settings.api_provider == 'schwab' %}selected{% endif %}>Charles Schwab</option>
+                                    <option value="interactive_brokers" {% if settings.api_provider == 'interactive_brokers' %}selected{% endif %}>Interactive Brokers</option>
+                                </select>
+                                <div class="form-text">Select your trading platform provider</div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_key" class="form-label">API Key</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="api_key" name="api_key" value="{{ settings.api_key }}" 
+                                           placeholder="Enter your API key">
+                                    <button class="btn btn-outline-secondary toggle-password" type="button" data-target="api_key">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">Your trading platform API key</div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="api_secret" class="form-label">API Secret</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="api_secret" name="api_secret" value="{{ settings.api_secret }}" 
+                                           placeholder="Enter your API secret">
+                                    <button class="btn btn-outline-secondary toggle-password" type="button" data-target="api_secret">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">Your trading platform API secret</div>
+                            </div>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="is_paper_trading" name="is_paper_trading" 
+                                       {% if settings.is_paper_trading %}checked{% endif %}>
+                                <label class="form-check-label" for="is_paper_trading">Use Paper Trading</label>
+                                <div class="form-text">Enable to use paper trading (real API but with simulated money)</div>
+                            </div>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="force_simulation_mode" name="force_simulation_mode" 
+                                       {% if settings.force_simulation_mode %}checked{% endif %}>
+                                <label class="form-check-label" for="force_simulation_mode">
+                                    <strong>Force Simulation Mode</strong>
+                                    <span class="badge bg-success ms-2">Recommended for Testing</span>
+                                </label>
+                                <div class="form-text">
+                                    Use simulation mode to test all features without a real Schwab API connection.
+                                    <strong>Required for Replit development environment</strong> as Schwab blocks connections from non-whitelisted servers.
+                                </div>
+                                <div class="form-text">Enable to use completely simulated data (no API connection required)</div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-outline-primary" id="testConnection">
+                                    <i class="fas fa-plug me-2"></i> Test Connection
+                                </button>
+                                
+                                <!-- OAuth Authentication Section -->
+                                <div class="schwab-oauth-section" {% if settings.api_provider != 'schwab' %}style="display: none;"{% endif %}>
+                                    <div class="alert {% if settings.oauth_access_token %}alert-success{% else %}alert-info{% endif %} mt-3">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <i class="fas {% if settings.oauth_access_token %}fa-check-circle{% else %}fa-info-circle{% endif %} me-2"></i>
+                                                <strong>{% if settings.oauth_access_token %}Connected to Schwab API{% else %}Schwab API requires OAuth2 authentication{% endif %}</strong>
+                                            </div>
+                                            {% if settings.oauth_access_token %}
+                                            <span class="badge bg-success">Authenticated</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        {% if settings.oauth_access_token %}
+                                            <p class="mb-1 mt-2">Your account is successfully connected to the Schwab API.</p>
+                                            {% if settings.oauth_token_expiry %}
+                                                <p class="mb-0"><small>Token expires: {{ settings.oauth_token_expiry.strftime('%Y-%m-%d %H:%M:%S') }}</small></p>
+                                            {% endif %}
+                                            <div class="mt-2">
+                                                <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-sync-alt me-1"></i> Refresh Connection
+                                                </a>
+                                            </div>
+                                        {% else %}
+                                            <p class="mb-0 mt-2">To use the Schwab trading API, you need to authenticate your account.</p>
+                                            
+                                            <!-- Schwab Callback URL Requirements -->
+                                            <div class="card mt-2 mb-3 border-info">
+                                                <div class="card-header bg-info text-white">
+                                                    <i class="fas fa-info-circle me-1"></i> Schwab API Callback URL Requirements
+                                                </div>
+                                                <div class="card-body">
+                                                    <p class="small mb-1">Register this exact callback URL in your Schwab Developer Portal:</p>
+                                                    <code id="callbackUrl" class="d-block my-2 p-2 bg-dark text-light">{{ request.url_root.rstrip('/').replace('http:', 'https:', 1) }}/oauth/callback</code>
+                                                    
+                                                    <p class="small mb-1 mt-3">Schwab callback requirements:</p>
+                                                    <ul class="small">
+                                                        <li>Must use HTTPS protocol</li>
+                                                        <li>Must have a valid SSL/TLS certificate</li>
+                                                        <li>Cannot use localhost or 127.0.0.1</li>
+                                                        <li>Cannot include special characters except those allowed in RFC 3986</li>
+                                                        <li>For production, should not include ports</li>
+                                                    </ul>
+                                                    
+                                                    <p class="small"><a href="https://developer.schwab.com/user-guides/apis-and-apps/app-callback-url-requirements" target="_blank">
+                                                        <i class="fas fa-external-link-alt me-1"></i> Schwab Developer Documentation
+                                                    </a></p>
+                                                    
+                                                    {% if session.get('oauth_diagnostics') %}
+                                                    <div class="mt-3 pt-3 border-top">
+                                                        <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i> Connection Diagnostics</h6>
+                                                        <p class="small mb-2">The following information may help troubleshoot connection issues:</p>
+                                                        <div class="bg-dark text-light p-2 small" style="border-radius: 4px;">
+                                                            <div><strong>Status:</strong> {{ session.oauth_diagnostics.status_code }}</div>
+                                                            <div><strong>Target URL:</strong> {{ session.oauth_diagnostics.target_url }}</div>
+                                                            <div><strong>Environment:</strong> {{ session.oauth_diagnostics.environment }}</div>
+                                                            <div><strong>Timestamp:</strong> {{ session.oauth_diagnostics.timestamp }}</div>
+                                                            <div class="mt-2"><strong>Next steps:</strong></div>
+                                                            <ol class="mt-1 mb-0">
+                                                                <li>Enable "Force Simulation Mode" below to test without API connection</li>
+                                                                <li>For real connections: Request Replit IP address whitelisting from Schwab</li>
+                                                                <li>Consider deploying to a production server with a whitelisted IP</li>
+                                                                <li>If using sandbox, try the sandbox environment instead of production</li>
+                                                            </ol>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="d-grid">
+                                                <a href="{{ url_for('oauth_initiate', provider='schwab') }}" class="btn btn-primary">
+                                                    <i class="fas fa-key me-1"></i> Connect with Schwab
+                                                </a>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Trading Strategy Settings -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Trading Strategy</h5>
+                            
+                            <div class="form-group mb-3">
+                                <label class="form-label">Select Strategy</label>
+                                <div class="d-flex flex-wrap strategy-selector">
+                                    <h6 class="w-100 mb-2">Basic Options Strategies</h6>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_covered_call" name="enabled_strategies" value="covered_call" 
+                                               {% if 'covered_call' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_covered_call">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">Basic</span>
+                                                Covered Call
+                                            </div>
+                                            <small class="d-block text-muted">Sell call options against stock holdings</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_wheel" name="enabled_strategies" value="wheel" 
+                                               {% if 'wheel' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_wheel">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">Basic</span>
+                                                Wheel Strategy
+                                            </div>
+                                            <small class="d-block text-muted">Cycle between puts and covered calls for income</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_collar" name="enabled_strategies" value="collar" 
+                                               {% if 'collar' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_collar">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">Basic</span>
+                                                Collar
+                                            </div>
+                                            <small class="d-block text-muted">Protect stock with puts while selling calls</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <h6 class="w-100 mb-2 mt-3">Advanced Options Strategies</h6>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_put_credit_spread" name="enabled_strategies" value="put_credit_spread" 
+                                               {% if 'put_credit_spread' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_put_credit_spread">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-info me-2">Advanced</span>
+                                                Put Credit Spread
+                                            </div>
+                                            <small class="d-block text-muted">Bullish strategy with defined risk</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_iron_condor" name="enabled_strategies" value="iron_condor" 
+                                               {% if 'iron_condor' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_iron_condor">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-info me-2">Advanced</span>
+                                                Iron Condor
+                                            </div>
+                                            <small class="d-block text-muted">Market-neutral strategy with defined risk</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_iron_butterfly" name="enabled_strategies" value="iron_butterfly" 
+                                               {% if 'iron_butterfly' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_iron_butterfly">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-warning me-2">Advanced</span>
+                                                Iron Butterfly
+                                            </div>
+                                            <small class="d-block text-muted">Market-neutral with narrower profit zone</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_calendar_spread" name="enabled_strategies" value="calendar_spread" 
+                                               {% if 'calendar_spread' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_calendar_spread">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-warning me-2">Advanced</span>
+                                                Calendar Spread
+                                            </div>
+                                            <small class="d-block text-muted">Profit from time decay while remaining directionally neutral</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_diagonal_spread" name="enabled_strategies" value="diagonal_spread" 
+                                               {% if 'diagonal_spread' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_diagonal_spread">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-danger me-2">Complex</span>
+                                                Diagonal Spread
+                                            </div>
+                                            <small class="d-block text-muted">Advanced strategy with different strikes and expirations</small>
+                                        </label>
+                                    </div>
+                                    
+                                    <h6 class="w-100 mb-2 mt-3">Forex Strategies</h6>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_trend" name="enabled_strategies" value="forex_trend" 
+                                               {% if 'forex_trend' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_trend">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Trend Following
+                                            </div>
+                                            <small class="d-block text-muted">Follow medium-term forex market trends</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline me-4 mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_breakout" name="enabled_strategies" value="forex_breakout" 
+                                               {% if 'forex_breakout' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_breakout">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Breakout Trading
+                                            </div>
+                                            <small class="d-block text-muted">Capitalize on forex price breakouts</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-3">
+                                        <input class="form-check-input" type="checkbox" id="strategy_forex_range" name="enabled_strategies" value="forex_range" 
+                                               {% if 'forex_range' in settings.enabled_strategies %}checked{% endif %}>
+                                        <label class="form-check-label" for="strategy_forex_range">
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2">Forex</span>
+                                                Range Trading
+                                            </div>
+                                            <small class="d-block text-muted">Trade within established price ranges</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-text mb-3">
+                                    Select strategies to enable. Multiple strategies can be active simultaneously.
+                                    <a href="{{ url_for('strategy_info') }}" class="ms-2 text-decoration-none">
+                                        <i class="fas fa-info-circle"></i> Learn more about these strategies
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="risk_level" class="form-label">Risk Level</label>
+                                <select class="form-select" id="risk_level" name="risk_level">
+                                    <option value="conservative" {% if settings.risk_level == 'conservative' %}selected{% endif %}>Conservative</option>
+                                    <option value="moderate" {% if settings.risk_level == 'moderate' %}selected{% endif %}>Moderate</option>
+                                    <option value="aggressive" {% if settings.risk_level == 'aggressive' %}selected{% endif %}>Aggressive</option>
+                                </select>
+                                <div class="form-text">
+                                    <strong>Conservative:</strong> Lower returns, higher probability of success<br>
+                                    <strong>Moderate:</strong> Balanced risk/reward<br>
+                                    <strong>Aggressive:</strong> Higher returns, lower probability of success
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="max_position_size" class="form-label">Maximum Position Size ($)</label>
+                                <input type="number" class="form-control" id="max_position_size" name="max_position_size" 
+                                       value="{{ settings.max_position_size }}" min="100" step="100">
+                                <div class="form-text">Maximum dollar amount per position</div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="profit_target_percentage" class="form-label">Profit Target (%)</label>
+                                        <input type="number" class="form-control" id="profit_target_percentage" name="profit_target_percentage" 
+                                               value="{{ settings.profit_target_percentage }}" min="1" max="50" step="0.5">
+                                        <div class="form-text">Percentage gain to trigger profit taking</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="stop_loss_percentage" class="form-label">Stop Loss (%)</label>
+                                        <input type="number" class="form-control" id="stop_loss_percentage" name="stop_loss_percentage" 
+                                               value="{{ settings.stop_loss_percentage }}" min="1" max="20" step="0.5">
+                                        <div class="form-text">Maximum allowed loss before closing position</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="options_expiry_days" class="form-label">Target Options Expiry (Days)</label>
+                                <input type="range" class="form-range" id="options_expiry_days" name="options_expiry_days" 
+                                       value="{{ settings.options_expiry_days }}" min="7" max="60" step="1">
+                                <div class="d-flex justify-content-between">
+                                    <span>7 days</span>
+                                    <span id="expiry_value">{{ settings.options_expiry_days }} days</span>
+                                    <span>60 days</span>
+                                </div>
+                                <div class="form-text">Preferred time until options expiration</div>
+                            </div>
+                            
+
+                            
+                            <h5 class="border-bottom pb-2 mt-4">Forex Trading Settings</h5>
+                            <div class="form-group mb-3">
+                                <label for="forex_pairs_watchlist" class="form-label">Forex Pairs Watchlist</label>
+                                <input type="text" class="form-control" id="forex_pairs_watchlist" name="forex_pairs_watchlist" 
+                                       value="{{ settings.forex_pairs_watchlist }}">
+                                <div class="form-text">Comma-separated list of forex pairs to trade (e.g., EUR/USD,GBP/USD,USD/JPY)</div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="forex_leverage" class="form-label">Forex Leverage</label>
+                                        <input type="number" class="form-control" id="forex_leverage" name="forex_leverage" 
+                                               value="{{ settings.forex_leverage }}" min="1" max="100" step="1">
+                                        <div class="form-text">Leverage ratio for forex trading (e.g., 10 for 10:1)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="forex_lot_size" class="form-label">Default Lot Size</label>
+                                        <select class="form-select" id="forex_lot_size" name="forex_lot_size">
+                                            <option value="0.01" {% if settings.forex_lot_size == 0.01 %}selected{% endif %}>Micro (0.01)</option>
+                                            <option value="0.1" {% if settings.forex_lot_size == 0.1 %}selected{% endif %}>Mini (0.1)</option>
+                                            <option value="1.0" {% if settings.forex_lot_size == 1.0 %}selected{% endif %}>Standard (1.0)</option>
+                                        </select>
+                                        <div class="form-text">Default trading lot size for forex positions</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- AI Advisor Settings -->
+                        <div class="mb-4">
+                            <div class="card-header">
+                                <i class="fas fa-brain me-2"></i> AI Advisor Settings
+                            </div>
+                            <div class="card-body">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-lightbulb me-1 text-warning"></i> Enhanced AI Trading Analysis
+                                        </h6>
+                                        <p class="card-text small">Our AI advisor integrates multiple advanced models for smarter trading recommendations, deeper market analysis, and more accurate strategy optimization.</p>
+                                        
+                                        <div class="d-flex align-items-center mt-2">
+                                            <div class="me-auto">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="enable_ai_advisor" name="enable_ai_advisor" {% if ai_enabled %}checked{% endif %}>
+                                                    <label class="form-check-label" for="enable_ai_advisor">Enable AI Advisor</label>
+                                                </div>
+                                            </div>
+                                            
+                                            {% if ai_status == "active" %}
+                                                <span class="badge bg-success">AI Active</span>
+                                            {% elif ai_status == "limited" %}
+                                                <span class="badge bg-warning">Limited Function</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label for="openai_api_key" class="form-label">
+                                        <i class="fas fa-key me-1"></i> OpenAI API Key
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="openai_api_key" name="openai_api_key" placeholder="Enter your OpenAI API key" value="{{ openai_api_key if openai_api_key else '' }}">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleApiKey">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle text-info me-1"></i> Required for AI trading analysis and recommendations. Your API key is stored securely.
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label for="ai_model_selection" class="form-label">Model Selection Strategy</label>
+                                    <select class="form-select" id="ai_model_selection" name="ai_model_selection">
+                                        <option value="auto" {% if settings.ai_model_selection == 'auto' %}selected{% endif %}>Automatic (Best Available)</option>
+                                        <option value="ensemble" {% if settings.ai_model_selection == 'ensemble' %}selected{% endif %}>Ensemble (Multiple Models)</option>
+                                        <option value="cost_effective" {% if settings.ai_model_selection == 'cost_effective' %}selected{% endif %}>Cost Effective (GPT-3.5 Focus)</option>
+                                        <option value="premium" {% if settings.ai_model_selection == 'premium' %}selected{% endif %}>Premium (GPT-4o Focus)</option>
+                                    </select>
+                                    <div class="form-text">
+                                        <i class="fas fa-circle-info me-1"></i> Automatic selects the optimal model strategy based on task complexity
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <span class="badge bg-primary">Technical Analysis</span>
+                                        <span class="badge bg-primary">Fundamental Analysis</span>
+                                        <span class="badge bg-primary">Market Sentiment</span>
+                                        <span class="badge bg-primary">Strategy Optimization</span>
+                                        <span class="badge bg-primary">Risk Assessment</span>
+                                    </div>
+                                    <div class="form-text mt-1">AI advisor modules currently enabled</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i> Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Quick Help Card -->
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-question-circle me-2"></i> Configuration Help
+                </div>
+                <div class="card-body">
+                    <h5>API Connection</h5>
+                    <p>To connect your trading account, you'll need to generate API credentials from your broker:</p>
+                    <ul>
+                        <li><strong>Alpaca:</strong> <a href="https://app.alpaca.markets/brokerage/dashboard/overview" target="_blank">Get credentials</a></li>
+                        <li><strong>TD Ameritrade:</strong> <a href="https://developer.tdameritrade.com/apis" target="_blank">Get credentials</a></li>
+                        <li><strong>Charles Schwab:</strong> <a href="https://developer.schwab.com/get-started" target="_blank">Get credentials</a></li>
+                        <li><strong>Interactive Brokers:</strong> <a href="https://www.interactivebrokers.com/en/software/am/am/manageaccount/apideveloper.htm" target="_blank">Get credentials</a></li>
+                    </ul>
+                    <hr>
+                    <h5>Strategy Settings</h5>
+                    <p>Your trading strategy settings determine how the bot selects and executes covered call trades:</p>
+                    <ul>
+                        <li><strong>Risk Level:</strong> Affects strike price selection and premium targets</li>
+                        <li><strong>Position Size:</strong> Controls maximum investment per stock</li>
+                        <li><strong>Profit/Stop:</strong> When to take profits or cut losses</li>
+                        <li><strong>Expiry:</strong> Target days until option expiration</li>
+                    </ul>
+                    <hr>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i> Changes will apply to new trades only. Existing positions will continue with their current settings.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Strategy Presets Card -->
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <i class="fas fa-lightbulb me-2"></i> Strategy Presets
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('income')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Income Generator</strong>
+                                <span class="badge bg-success">Popular</span>
+                            </div>
+                            <small class="text-muted">Focus on higher premium, closer strike prices</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('conservative')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Conservative</strong>
+                            </div>
+                            <small class="text-muted">Far OTM strikes with lower premiums but higher safety</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('aggressive')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Aggressive Growth</strong>
+                            </div>
+                            <small class="text-muted">ATM strikes with max premium, higher assignment risk</small>
+                        </button>
+                        <button class="list-group-item list-group-item-action" onclick="applyPreset('weekly')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Weekly Strategy</strong>
+                            </div>
+                            <small class="text-muted">Short-term weekly options for faster returns</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle API key visibility
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('toggleApiKey');
+        const apiKeyInput = document.getElementById('openai_api_key');
+        
+        if (toggleBtn && apiKeyInput) {
+            toggleBtn.addEventListener('click', function() {
+                const type = apiKeyInput.type;
+                apiKeyInput.type = type === 'password' ? 'text' : 'password';
+                toggleBtn.innerHTML = type === 'password' ? 
+                    '<i class="fas fa-eye-slash"></i>' : 
+                    '<i class="fas fa-eye"></i>';
+            });
+        }
+    });
+    
+    // Function to update the OAuth sections based on selected provider
+    function updateProviderSpecificSections() {
+        const provider = document.getElementById('api_provider').value;
+        const schwabSection = document.querySelector('.schwab-oauth-section');
+        
+        // Update Schwab OAuth section visibility
+        if (provider === 'schwab') {
+            schwabSection.style.display = 'block';
+            
+            // Set the callback URL
+            const origin = window.location.origin;
+            document.getElementById('callbackUrl').textContent = `${origin}/oauth/callback`;
+        } else {
+            schwabSection.style.display = 'none';
+        }
+    }
+    
+    // Setup toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const inputField = document.getElementById(targetId);
+            
+            // Toggle password visibility
+            if (inputField.type === 'password') {
+                inputField.type = 'text';
+                this.innerHTML = '<i class="fas fa-eye-slash"></i>';
+            } else {
+                inputField.type = 'password';
+                this.innerHTML = '<i class="fas fa-eye"></i>';
+            }
+        });
+    });
+    
+    // Run on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateProviderSpecificSections();
+        
+        // Add listener for provider changes
+        document.getElementById('api_provider').addEventListener('change', updateProviderSpecificSections);
+    });
+    
+    // Update expiry value display
+    document.getElementById('options_expiry_days').addEventListener('input', function() {
+        document.getElementById('expiry_value').textContent = this.value + ' days';
+    });
+    
+    // Test API connection
+    document.getElementById('testConnection').addEventListener('click', function() {
+        const btn = this;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Testing...';
+        btn.disabled = true;
+        
+        // Get values
+        const provider = document.getElementById('api_provider').value;
+        const apiKey = document.getElementById('api_key').value;
+        const apiSecret = document.getElementById('api_secret').value;
+        const isPaperTrading = document.getElementById('is_paper_trading').checked;
+        const forceSimulationMode = document.getElementById('force_simulation_mode').checked;
+        
+        if (!apiKey || !apiSecret) {
+            alert('Please enter both API key and secret to test connection.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            return;
+        }
+        
+        // Remove any existing alerts
+        const existingAlerts = btn.parentNode.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Perform real API connection test
+        fetch('/api/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                provider: provider,
+                api_key: apiKey,
+                api_secret: apiSecret,
+                is_paper_trading: isPaperTrading,
+                force_simulation_mode: forceSimulationMode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const alertClass = data.success ? 'alert-success' : 'alert-danger';
+            const icon = data.success ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            const alert = document.createElement('div');
+            alert.className = `alert ${alertClass} mt-3`;
+            alert.innerHTML = `<i class="fas ${icon} me-2"></i> ${data.message}`;
+            
+            if (provider === 'schwab') {
+                if (!data.success) {
+                    // Add additional information for Schwab users
+                    const moreInfo = document.createElement('div');
+                    moreInfo.className = 'mt-2 small';
+                    moreInfo.innerHTML = `
+                        <strong>Note for Schwab API:</strong><br>
+                        You must complete the OAuth2 authentication process by clicking "Connect with Schwab" below.<br>
+                        Make sure your application is registered with the Schwab Developer Center and 
+                        your IP address is whitelisted. Visit <a href="https://developer.schwab.com/get-started" 
+                        target="_blank">Schwab Developer Portal</a> for details.
+                    `;
+                    alert.appendChild(moreInfo);
+                    
+                    // Highlight the OAuth section
+                    const oauthSection = document.querySelector('.schwab-oauth-section');
+                    if (oauthSection) {
+                        oauthSection.classList.add('border', 'border-primary', 'p-2', 'rounded');
+                        setTimeout(() => {
+                            oauthSection.classList.remove('border', 'border-primary', 'p-2', 'rounded');
+                        }, 3000);
+                    }
+                } else {
+                    // API key/secret check passed, but remind about OAuth
+                    const oauthReminder = document.createElement('div');
+                    oauthReminder.className = 'mt-2 small text-success';
+                    oauthReminder.innerHTML = `
+                        <strong>API credentials valid!</strong> Remember that Schwab also requires OAuth2 authentication 
+                        to access trading functionality. Make sure to complete the "Connect with Schwab" step below.
+                    `;
+                    alert.appendChild(oauthReminder);
+                }
+            }
+            
+            btn.parentNode.appendChild(alert);
+            
+            btn.innerHTML = data.success ? 
+                '<i class="fas fa-check me-2"></i> Connection Verified' : 
+                '<i class="fas fa-times me-2"></i> Connection Failed';
+            
+            // Reset button after a few seconds
+            setTimeout(function() {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 4000);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const errorAlert = document.createElement('div');
+            errorAlert.className = 'alert alert-danger mt-3';
+            errorAlert.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i> Error testing connection: ${error.message}`;
+            btn.parentNode.appendChild(errorAlert);
+            
+            btn.innerHTML = '<i class="fas fa-times me-2"></i> Connection Failed';
+            
+            setTimeout(function() {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 4000);
+        });
+    });
+    
+    // Apply strategy presets
+    function applyPreset(preset) {
+        switch(preset) {
+            case 'income':
+                document.getElementById('risk_level').value = 'moderate';
+                document.getElementById('profit_target_percentage').value = 5;
+                document.getElementById('stop_loss_percentage').value = 3;
+                document.getElementById('options_expiry_days').value = 30;
+                break;
+            case 'conservative':
+                document.getElementById('risk_level').value = 'conservative';
+                document.getElementById('profit_target_percentage').value = 3;
+                document.getElementById('stop_loss_percentage').value = 2;
+                document.getElementById('options_expiry_days').value = 45;
+                break;
+            case 'aggressive':
+                document.getElementById('risk_level').value = 'aggressive';
+                document.getElementById('profit_target_percentage').value = 8;
+                document.getElementById('stop_loss_percentage').value = 5;
+                document.getElementById('options_expiry_days').value = 30;
+                break;
+            case 'weekly':
+                document.getElementById('risk_level').value = 'aggressive';
+                document.getElementById('profit_target_percentage').value = 2;
+                document.getElementById('stop_loss_percentage').value = 2;
+                document.getElementById('options_expiry_days').value = 7;
+                break;
+        }
+        
+        // Update the expiry display
+        document.getElementById('expiry_value').textContent = document.getElementById('options_expiry_days').value + ' days';
+        
+        // Show confirmation toast
+        const toastEl = document.createElement('div');
+        toastEl.className = 'position-fixed top-0 end-0 p-3';
+        toastEl.style.zIndex = 1050;
+        toastEl.innerHTML = `
+            <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header">
+                    <strong class="me-auto">Strategy Preset</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    Strategy preset applied. Remember to save your settings!
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(toastEl);
+        
+        // Remove toast after 3 seconds
+        setTimeout(() => {
+            document.body.removeChild(toastEl);
+        }, 3000);
+    }
+</script>
+{% endblock %}

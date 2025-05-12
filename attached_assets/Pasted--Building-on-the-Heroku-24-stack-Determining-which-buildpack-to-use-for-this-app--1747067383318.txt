@@ -1,0 +1,68 @@
+-----> Building on the Heroku-24 stack
+-----> Determining which buildpack to use for this app
+-----> Python app detected
+ !     Error: Couldn't find any supported Python package manager files.
+ !     
+ !     A Python app on Heroku must have either a 'requirements.txt',
+ !     'Pipfile' or 'poetry.lock' package manager file in the root
+ !     directory of its source code.
+ !     
+ !     Currently the root directory of your app contains:
+ !     
+ !     add_oauth_fields.py
+ !     app.json
+ !     app.py
+ !     check_oauth_flow.py
+ !     config.py
+ !     create_test_user.py
+ !     create_user.py
+ !     export_project.py
+ !     fix_simulation_mode.py
+ !     forms.py
+ !     generated-icon.png
+ !     heroku_deployment.md
+ !     main.py
+ !     migrate_ai_settings.py
+ !     migrate_db.py
+ !     migrate_settings.py
+ !     models.py
+ !     Procfile
+ !     proxies.py
+ !     pyproject.toml
+ !     reset_db.py
+ !     runtime.txt
+ !     schwab_proxy.py
+ !     test_api_endpoints.py
+ !     test_schwab_auth_flow.py
+ !     test_schwab_connection.py
+ !     test_schwab_connector.py
+ !     test_schwab_developer_portal.py
+ !     test_schwab_gateway_cors.py
+ !     test_schwab_gateway.py
+ !     test_schwab_oauth2_flow.py
+ !     update_config.py
+ !     update_token_refresh.py
+ !     utils.py
+ !     uv.lock
+ !     
+ !     If your app already has a package manager file, check that it:
+ !     
+ !     1. Is in the top level directory (not a subdirectory).
+ !     2. Has the correct spelling (the filenames are case-sensitive).
+ !     3. Isn't listed in '.gitignore' or '.slugignore'.
+ !     4. Has been added to the Git repository using 'git add --all'
+ !        and then committed using 'git commit'.
+ !     
+ !     Otherwise, add a package manager file to your app. If your app has
+ !     no dependencies, then create an empty 'requirements.txt' file.
+ !     
+ !     If you would like to see support for the package manager uv,
+ !     please vote and comment on these GitHub issues:
+ !     https://github.com/heroku/heroku-buildpack-python/issues/1616
+ !     https://github.com/heroku/roadmap/issues/323
+ !     
+ !     For help with using Python on Heroku, see:
+ !     https://devcenter.heroku.com/articles/getting-started-with-python
+ !     https://devcenter.heroku.com/articles/python-support
+ !     Push rejected, failed to compile Python app.
+ !     Push failed
