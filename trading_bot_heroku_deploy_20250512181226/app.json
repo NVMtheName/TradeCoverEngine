@@ -1,0 +1,35 @@
+
+{
+  "name": "Trading Bot",
+  "description": "Advanced trading bot with AI-powered analysis and multi-provider API integration",
+  "repository": "https://github.com/yourusername/trading-bot",
+  "logo": "https://raw.githubusercontent.com/yourusername/trading-bot/main/static/img/logo.png",
+  "keywords": ["python", "flask", "trading", "finance", "ai", "schwab"],
+  "addons": ["heroku-postgresql:mini"],
+  "env": {
+    "FLASK_ENV": {
+      "description": "Flask environment",
+      "value": "production"
+    },
+    "SCHWAB_API_KEY": {
+      "description": "Your Charles Schwab API key (client ID)",
+      "required": true
+    },
+    "SCHWAB_API_SECRET": {
+      "description": "Your Charles Schwab API secret (client secret)",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "Your OpenAI API key for AI analysis features",
+      "required": false
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "python migrate_db.py"
+  }
+}
