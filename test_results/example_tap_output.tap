@@ -1,0 +1,24 @@
+TAP version 13
+1..18
+# TAP results for tests/unit/test_utils.py
+ok 1 tests/unit/test_utils.py::TestUtils.test_calculate_annualized_return
+ok 2 tests/unit/test_utils.py::TestUtils.test_format_currency
+ok 3 tests/unit/test_utils.py::TestUtils.test_format_percentage
+ok 4 tests/unit/test_utils.py::TestUtils.test_option_symbol_formatting
+ok 5 tests/unit/test_utils.py::TestUtils.test_parse_option_symbol
+# TAP results for tests/integration/test_database.py
+ok 6 tests/integration/test_database.py::TestDatabaseIntegration.test_user_creation
+ok 7 tests/integration/test_database.py::TestDatabaseIntegration.test_settings_relationship
+ok 8 tests/integration/test_database.py::TestDatabaseIntegration.test_trades_relationship
+ok 9 tests/integration/test_database.py::TestDatabaseIntegration.test_watchlist_relationship
+# TAP results for tests/integration/test_routes.py
+ok 10 tests/integration/test_routes.py::test_index_route
+ok 11 tests/integration/test_routes.py::test_login_route
+ok 12 tests/integration/test_routes.py::test_register_route
+ok 13 tests/integration/test_routes.py::test_dashboard_route
+ok 14 tests/integration/test_routes.py::test_settings_route
+ok 15 tests/integration/test_routes.py::test_strategy_info_route
+ok 16 tests/integration/test_routes.py::test_logout_route
+# TAP results for tests/unit/test_strategies.py
+ok 17 tests/unit/test_strategies.py::test_covered_call_strategy_selection
+ok 18 tests/unit/test_strategies.py::test_wheel_strategy_position_sizing

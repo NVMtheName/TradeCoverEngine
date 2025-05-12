@@ -1,12 +1,13 @@
 import os
 import sys
 import pytest
+from werkzeug.security import generate_password_hash
 
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import app, db
-from models import User, Settings
+import models
 
 
 @pytest.fixture(scope='function')
@@ -22,21 +23,20 @@ def test_app():
         db.create_all()
         
         # Create a test user
-        test_user = User(
-            username='testuser',
-            email='testuser@example.com'
-        )
-        test_user.set_password('password123')
+        test_user = models.User()
+        test_user.username = 'testuser'
+        test_user.email = 'testuser@example.com'
+        test_user.password_hash = generate_password_hash('password123')
         db.session.add(test_user)
+        db.session.flush()  # Flush to get the ID without committing
         
         # Create default settings
-        test_settings = Settings(
-            user_id=1,
-            api_provider='schwab',
-            is_paper_trading=True,
-            force_simulation_mode=True,
-            risk_level='moderate'
-        )
+        test_settings = models.Settings()
+        test_settings.user_id = test_user.id
+        test_settings.api_provider = 'schwab'
+        test_settings.is_paper_trading = True
+        test_settings.force_simulation_mode = True
+        test_settings.risk_level = 'moderate'
         db.session.add(test_settings)
         db.session.commit()
         
