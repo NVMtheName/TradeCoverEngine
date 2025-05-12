@@ -1,54 +1,63 @@
 """
-Pytest configuration file for tests.
+Configuration and fixtures for pytest testing.
 """
 
 import os
-import sys
 import pytest
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
-
-# Add the parent directory to sys.path so that imports work correctly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from app import app as flask_app
-from app import db as flask_db
-
+from app import db
 
 @pytest.fixture
 def app():
-    """
-    Create a Flask app for testing.
-    """
-    # Override config for testing
+    """Create and configure a Flask app for testing."""
+    # Configure app for testing
     flask_app.config.update({
         'TESTING': True,
+        'DEBUG': True,
         'SQLALCHEMY_DATABASE_URI': os.environ.get('DATABASE_URL', 'sqlite:///:memory:'),
-        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
     })
-    
-    # Set up app context
-    with flask_app.app_context():
-        yield flask_app
 
+    # Create the test client
+    with flask_app.app_context():
+        # Create tables
+        db.create_all()
+        
+        yield flask_app
+        
+        # Clean up
+        db.session.remove()
+        db.drop_all()
 
 @pytest.fixture
 def client(app):
-    """
-    Create a test client for the app.
-    """
+    """Test client for the Flask app."""
     return app.test_client()
 
+@pytest.fixture
+def runner(app):
+    """Test CLI runner for the Flask app."""
+    return app.test_cli_runner()
+
+@pytest.fixture
+def db_session(app):
+    """Database session for testing."""
+    with app.app_context():
+        connection = db.engine.connect()
+        transaction = connection.begin()
+        
+        session = db.scoped_session(
+            db.sessionmaker(autocommit=False, autoflush=False, bind=connection)
+        )
+        
+        db.session = session
+        
+        yield db.session
+        
+        transaction.rollback()
+        connection.close()
+        db.session.remove()
 
 @pytest.fixture
 def db(app):
-    """
-    Provide the database instance.
-    """
-    # Set up clean tables for tests
-    with app.app_context():
-        flask_db.create_all()
-        yield flask_db
-        flask_db.session.remove()
-        flask_db.drop_all()
+    """Database object for testing."""
+    return db
