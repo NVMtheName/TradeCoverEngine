@@ -1,80 +1,31 @@
 {
-  "name": "Schwab Trading Bot",
-  "description": "A sophisticated trading bot with Schwab API integration and AI-powered analytics",
-  "repository": "https://github.com/yourusername/trading-bot",
-  "keywords": ["python", "flask", "trading", "schwab", "ai"],
-  "addons": [
-    "heroku-postgresql:mini",
-    "quotaguardstatic:starter"
-  ],
+  "name": "Trading Bot",
+  "description": "A sophisticated trading bot with multi-provider API integration",
+  "repository": "https://github.com/username/trading-bot",
+  "keywords": ["python", "flask", "trading", "bot", "api"],
+  "success_url": "/",
   "buildpacks": [
     {
       "url": "heroku/python"
     }
   ],
   "env": {
-    "SECRET_KEY": {
-      "description": "A secret key for Flask sessions",
-      "generator": "secret"
-    },
-    "SCHWAB_API_KEY": {
-      "description": "Your Schwab API key",
-      "required": true
-    },
-    "SCHWAB_API_SECRET": {
-      "description": "Your Schwab API secret",
-      "required": true
-    },
-    "OPENAI_API_KEY": {
-      "description": "Optional: Your OpenAI API key for AI features",
-      "required": false
-    },
     "FLASK_ENV": {
-      "description": "Flask environment (production or development)",
+      "description": "The environment to run the application in",
       "value": "production"
     },
-    "DISABLE_COLLECTSTATIC": {
-      "description": "Disable static file collection",
-      "value": "1"
+    "FLASK_SECRET_KEY": {
+      "description": "A secret key for verifying the integrity of signed cookies",
+      "generator": "secret"
     }
   },
-  "formation": {
-    "web": {
-      "quantity": 1,
-      "size": "basic"
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini",
+      "as": "DATABASE"
     }
-  },
+  ],
   "scripts": {
-    "postdeploy": "python -c 'from app import app, db; with app.app_context(): db.create_all()'"
-  },
-  "environments": {
-    "test": {
-      "formation": {
-        "test": {
-          "quantity": 1,
-          "size": "standard-2x"
-        }
-      },
-      "scripts": {
-        "test": "pip install pytest && python -m pytest || echo 'Tests completed with non-zero exit code but deployment will continue'"
-      },
-      "env": {
-        "FLASK_ENV": "test",
-        "PYTEST_ADDOPTS": "--no-header --no-summary -v"
-      },
-      "addons": [
-        "heroku-postgresql:mini"
-      ]
-    }
-  },
-  "ci": {
-    "test": {
-      "formation": {
-        "test": {
-          "quantity": 1,
-          "size": "standard-2x"
-        }
-      }
-    }
+    "postdeploy": "python -c \"from app import app, db; app.app_context().push(); db.create_all()\""
   }
 }
