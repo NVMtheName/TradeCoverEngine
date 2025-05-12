@@ -1,15 +1,11 @@
+build:
+  languages:
+    python: "3.10.12"
+
 setup:
   addons:
     - plan: heroku-postgresql:mini
       as: DATABASE
-build:
-  config:
-    FLASK_ENV: production
-  languages:
-    - python
+
 run:
-  web: gunicorn main:app
-test:
-  skip_cleanup: true
-  override:
-    - python -m pytest || echo "Test run complete"
+  web: gunicorn --workers=2 --bind 0.0.0.0:$PORT --timeout 60 main:app
