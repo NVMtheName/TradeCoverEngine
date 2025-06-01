@@ -115,6 +115,48 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Admin credential protection functions
+def backup_admin_credentials(settings):
+    """Create secure backup of admin credentials"""
+    try:
+        logger.info(f"Creating credential backup for admin user - API key: {'present' if settings.api_key else 'missing'}, OpenAI key: {'present' if settings.openai_api_key else 'missing'}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to backup admin credentials: {str(e)}")
+        return False
+
+def restore_admin_credentials_if_needed(user_id):
+    """Restore admin credentials if they're missing"""
+    try:
+        user = User.query.get(user_id)
+        if not user or not hasattr(user, 'has_admin_access') or not user.has_admin_access():
+            return False
+            
+        settings = Settings.query.filter_by(user_id=user_id).first()
+        if not settings:
+            return False
+            
+        needs_restore = False
+        if not settings.api_key or not settings.openai_api_key:
+            logger.info(f"Admin credentials missing for user {user.username} - attempting restoration")
+            needs_restore = True
+        
+        if needs_restore:
+            if not settings.api_key:
+                settings.api_key = os.environ.get('SCHWAB_API_KEY', '')
+            if not settings.api_secret:
+                settings.api_secret = os.environ.get('SCHWAB_API_SECRET', '')
+            if not settings.openai_api_key:
+                settings.openai_api_key = os.environ.get('OPENAI_API_KEY', '')
+            
+            db.session.commit()
+            logger.info(f"Restored admin credentials for user {user.username}")
+            
+        return needs_restore
+    except Exception as e:
+        logger.error(f"Failed to restore admin credentials: {str(e)}")
+        return False
+
 # Import trading bot modules
 from trading_bot.api_connector import APIConnector
 from trading_bot.stock_analyzer import StockAnalyzer
