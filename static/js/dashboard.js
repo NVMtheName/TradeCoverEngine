@@ -235,6 +235,9 @@ function updatePositionStatuses() {
 document.addEventListener('DOMContentLoaded', updatePositionStatuses);
 
 // Project download functionality
-document.getElementById('downloadProject').addEventListener('click', function() {
-    window.location.href = '/download_project';
-});
+const downloadButton = document.getElementById('downloadProject');
+if (downloadButton) {
+    downloadButton.addEventListener('click', function() {
+        window.location.href = '/download_project';
+    });
+}

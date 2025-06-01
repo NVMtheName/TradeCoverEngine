@@ -10,6 +10,8 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False)  # Admin privilege level
+    access_level = db.Column(db.String(20), default='standard')  # standard, premium, admin
     
     # Relationships
     trades = db.relationship('Trade', backref='user', lazy=True)
@@ -25,6 +27,14 @@ class User(UserMixin, db.Model):
         if self.password_hash:
             return check_password_hash(self.password_hash, password)
         return False
+    
+    def has_admin_access(self):
+        """Check if user has admin privileges"""
+        return self.is_admin or self.access_level == 'admin'
+    
+    def has_premium_access(self):
+        """Check if user has premium or admin access"""
+        return self.access_level in ['premium', 'admin'] or self.is_admin
         
     def __repr__(self):
         return f'<User {self.username}>'
