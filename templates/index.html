@@ -1,67 +1,115 @@
 {% extends "layout.html" %}
 
-{% block title %}Trading Bot - Automated Covered Call Strategies{% endblock %}
+{% block title %}Arbion - Advanced Trading Platform{% endblock %}
 
 {% block content %}
-<div class="hero-section">
+<div class="hero-section py-5">
     <div class="container">
-        <h1 class="hero-title">Automated Covered Call Trading</h1>
-        <p class="hero-subtitle">Analyze stocks and execute covered call strategies with confidence</p>
-        <div class="mt-4">
-            {% if current_user.is_authenticated %}
-            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-lg me-2">
-                <i class="fas fa-tachometer-alt me-2"></i> Go to Dashboard
-            </a>
-            <a href="{{ url_for('analysis') }}" class="btn btn-outline-light btn-lg">
-                <i class="fas fa-search-dollar me-2"></i> Analyze Stocks
-            </a>
-            {% else %}
-            <a href="{{ url_for('login') }}" class="btn btn-light btn-lg me-2">
-                <i class="fas fa-sign-in-alt me-2"></i> Login
-            </a>
-            <a href="{{ url_for('register') }}" class="btn btn-outline-light btn-lg">
-                <i class="fas fa-user-plus me-2"></i> Register
-            </a>
-            {% endif %}
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold text-gradient mb-4">Welcome to Arbion</h1>
+                <p class="lead mb-4">Advanced AI-powered trading platform that combines sophisticated algorithms with intuitive design to maximize your investment potential.</p>
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-tachometer-alt me-2"></i> Go to Dashboard
+                    </a>
+                    <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-chart-bar me-2"></i> Analyze Markets
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-rocket me-2"></i> Get Started Free
+                    </a>
+                    <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-sign-in-alt me-2"></i> Sign In
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="glass p-4 rounded-4">
+                    <div class="text-center">
+                        <i class="fas fa-chart-line fa-6x text-gradient mb-3"></i>
+                        <h4 class="text-gradient">AI-Powered Analytics</h4>
+                        <p class="text-secondary">Leverage advanced algorithms for smarter trading decisions</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="container">
     <!-- Main features section -->
-    <section class="mb-5">
-        <h2 class="text-center mb-4">Key Features</h2>
+    <section class="py-5">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold text-gradient">Powerful Features</h2>
+            <p class="lead text-secondary">Everything you need for professional trading</p>
+        </div>
         <div class="row g-4">
-            <div class="col-md-4">
-                <div class="card feature-card h-100">
-                    <div class="card-body">
-                        <div class="feature-icon">
-                            <i class="fas fa-robot"></i>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-brain fa-3x text-gradient"></i>
                         </div>
-                        <h5 class="card-title">Automated Analysis</h5>
-                        <p class="card-text">Scan and analyze stocks to identify profitable covered call opportunities based on technical indicators and options data.</p>
+                        <h5 class="card-title fw-bold">AI-Powered Analysis</h5>
+                        <p class="card-text text-secondary">Advanced machine learning algorithms analyze market patterns and identify high-probability trading opportunities.</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card feature-card h-100">
-                    <div class="card-body">
-                        <div class="feature-icon">
-                            <i class="fas fa-chart-line"></i>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-shield-alt fa-3x text-gradient"></i>
                         </div>
-                        <h5 class="card-title">Strategy Optimization</h5>
-                        <p class="card-text">Optimize your covered call strategies with customizable risk levels, profit targets, and expiration dates.</p>
+                        <h5 class="card-title fw-bold">Risk Management</h5>
+                        <p class="card-text text-secondary">Comprehensive risk controls with customizable stop-losses, position sizing, and portfolio management tools.</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card feature-card h-100">
-                    <div class="card-body">
-                        <div class="feature-icon">
-                            <i class="fas fa-exchange-alt"></i>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-rocket fa-3x text-gradient"></i>
                         </div>
-                        <h5 class="card-title">Seamless Execution</h5>
-                        <p class="card-text">Execute trades automatically through your existing brokerage account with proper risk management.</p>
+                        <h5 class="card-title fw-bold">Lightning Fast</h5>
+                        <p class="card-text text-secondary">Execute trades in milliseconds with our optimized infrastructure and direct broker integrations.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-mobile-alt fa-3x text-gradient"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Mobile Ready</h5>
+                        <p class="card-text text-secondary">Trade anywhere with our responsive design that works perfectly on all devices and screen sizes.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-chart-bar fa-3x text-gradient"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Advanced Analytics</h5>
+                        <p class="card-text text-secondary">Detailed performance metrics, backtesting capabilities, and comprehensive reporting tools.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 text-center">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-cog fa-3x text-gradient"></i>
+                        </div>
+                        <h5 class="card-title fw-bold">Full Automation</h5>
+                        <p class="card-text text-secondary">Set your strategy once and let Arbion handle everything automatically with intelligent decision making.</p>
                     </div>
                 </div>
             </div>
@@ -69,92 +117,76 @@
     </section>
 
     <!-- How it works section -->
-    <section class="mb-5">
-        <h2 class="text-center mb-4">How It Works</h2>
-        <div class="row align-items-center mb-5">
-            <div class="col-md-6">
-                <h3>1. Connect Your Trading Account</h3>
-                <p>Link your existing brokerage account through secure API connections. We support major platforms including Alpaca, TD Ameritrade, and more.</p>
-                <p>Set your risk parameters and trading preferences in the settings panel to align with your investment goals.</p>
-                <a href="{{ url_for('settings') }}" class="btn btn-primary">
-                    <i class="fas fa-plug me-2"></i> Connect Account
-                </a>
-            </div>
-            <div class="col-md-6">
-                <div class="card bg-dark">
-                    <div class="card-body">
-                        <div class="text-center p-4">
-                            <i class="fas fa-link fa-5x text-primary mb-3"></i>
-                            <h5>Secure API Connection</h5>
-                            <p class="text-muted">Your credentials are securely stored and never shared</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <section class="py-5">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold text-gradient">How Arbion Works</h2>
+            <p class="lead text-secondary">Get started in three simple steps</p>
         </div>
         
-        <div class="row align-items-center mb-5">
-            <div class="col-md-6 order-md-2">
-                <h3>2. Analyze Stock Opportunities</h3>
-                <p>Our algorithm scans the market for stocks that meet your criteria and show strong technical indicators for covered call strategies.</p>
-                <p>View detailed analysis including implied volatility, potential returns, and recommended strike prices for each opportunity.</p>
-                <a href="{{ url_for('analysis') }}" class="btn btn-primary">
-                    <i class="fas fa-search-dollar me-2"></i> Analyze Stocks
-                </a>
-            </div>
-            <div class="col-md-6 order-md-1">
-                <div class="card bg-dark">
-                    <div class="card-body">
-                        <div class="text-center p-4">
-                            <i class="fas fa-analytics fa-5x text-primary mb-3"></i>
-                            <h5>Smart Stock Analysis</h5>
-                            <p class="text-muted">Technical indicators and options metrics</p>
-                        </div>
+        <div class="row g-5">
+            <div class="col-lg-4">
+                <div class="text-center">
+                    <div class="glass rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                        <span class="h2 fw-bold text-gradient mb-0">1</span>
                     </div>
+                    <h4 class="fw-bold mb-3">Connect & Configure</h4>
+                    <p class="text-secondary">Link your brokerage account securely and set your trading preferences. Arbion supports major platforms with bank-level security.</p>
+                    <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-cog me-2"></i> Setup Account
+                    </a>
                 </div>
             </div>
-        </div>
-        
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h3>3. Execute Covered Call Trades</h3>
-                <p>Execute trades with a single click or enable fully automated trading based on your predefined criteria.</p>
-                <p>Monitor your open positions, track performance, and receive notifications for important events like expiration dates or profit targets.</p>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
-                    <i class="fas fa-tachometer-alt me-2"></i> View Dashboard
-                </a>
-            </div>
-            <div class="col-md-6">
-                <div class="card bg-dark">
-                    <div class="card-body">
-                        <div class="text-center p-4">
-                            <i class="fas fa-hand-holding-usd fa-5x text-primary mb-3"></i>
-                            <h5>Smart Execution</h5>
-                            <p class="text-muted">Maximize premium income with optimal timing</p>
-                        </div>
+            
+            <div class="col-lg-4">
+                <div class="text-center">
+                    <div class="glass rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                        <span class="h2 fw-bold text-gradient mb-0">2</span>
                     </div>
+                    <h4 class="fw-bold mb-3">AI Analysis</h4>
+                    <p class="text-secondary">Our advanced algorithms continuously scan markets, analyzing thousands of data points to identify the best trading opportunities.</p>
+                    <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-chart-bar me-2"></i> View Analysis
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="text-center">
+                    <div class="glass rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                        <span class="h2 fw-bold text-gradient mb-0">3</span>
+                    </div>
+                    <h4 class="fw-bold mb-3">Execute & Monitor</h4>
+                    <p class="text-secondary">Execute trades automatically or manually with real-time monitoring, performance tracking, and intelligent risk management.</p>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt me-2"></i> View Dashboard
+                    </a>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Call to action -->
-    <section class="text-center mb-5 p-5 bg-dark rounded">
-        <h2>Ready to get started?</h2>
-        <p class="lead">Set up your trading bot in minutes and start generating income with covered calls</p>
-        <div class="mt-4">
-            {% if current_user.is_authenticated %}
-            <a href="{{ url_for('settings') }}" class="btn btn-primary btn-lg">
-                <i class="fas fa-rocket me-2"></i> Set Up Your Bot
-            </a>
-            {% else %}
-            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-2">
-                <i class="fas fa-user-plus me-2"></i> Create an Account
-            </a>
-            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg">
-                <i class="fas fa-sign-in-alt me-2"></i> Login
-            </a>
-            {% endif %}
+    <section class="py-5">
+        <div class="glass rounded-4 text-center p-5">
+            <h2 class="display-6 fw-bold text-gradient mb-3">Ready to Transform Your Trading?</h2>
+            <p class="lead text-secondary mb-4">Join thousands of traders who trust Arbion to maximize their investment potential</p>
+            <div class="d-flex flex-column flex-sm-row justify-content-center gap-3">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('settings') }}" class="btn btn-primary btn-lg px-5">
+                    <i class="fas fa-rocket me-2"></i> Configure Your Strategy
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary btn-lg px-5">
+                    <i class="fas fa-tachometer-alt me-2"></i> View Dashboard
+                </a>
+                {% else %}
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-5">
+                    <i class="fas fa-rocket me-2"></i> Start Free Trial
+                </a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg px-5">
+                    <i class="fas fa-sign-in-alt me-2"></i> Sign In
+                </a>
+                {% endif %}
+            </div>
         </div>
     </section>
 </div>
