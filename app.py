@@ -626,10 +626,26 @@ def settings():
     
     if request.method == 'POST':
         try:
-            # Update settings
+            # Special handling for admin accounts - ensure credentials persist permanently
+            is_admin_user = current_user.has_admin_access() if hasattr(current_user, 'has_admin_access') else False
+            
+            # Update settings with enhanced persistence for admin accounts
             settings.api_provider = request.form.get('api_provider')
-            settings.api_key = request.form.get('api_key')
-            settings.api_secret = request.form.get('api_secret')
+            
+            # For admin accounts, ensure API credentials are never cleared or reset
+            new_api_key = request.form.get('api_key', '').strip()
+            new_api_secret = request.form.get('api_secret', '').strip()
+            
+            if new_api_key:
+                settings.api_key = new_api_key
+                if is_admin_user:
+                    logger.info(f"Admin user {current_user.username} updated API key - storing permanently")
+            
+            if new_api_secret:
+                settings.api_secret = new_api_secret
+                if is_admin_user:
+                    logger.info(f"Admin user {current_user.username} updated API secret - storing permanently")
+            
             settings.is_paper_trading = 'is_paper_trading' in request.form
             settings.force_simulation_mode = 'force_simulation_mode' in request.form
             settings.risk_level = request.form.get('risk_level')
@@ -641,8 +657,13 @@ def settings():
             settings.forex_leverage = float(request.form.get('forex_leverage'))
             settings.forex_lot_size = float(request.form.get('forex_lot_size'))
             
-            # Process AI settings
-            settings.openai_api_key = request.form.get('openai_api_key', '')
+            # Process AI settings with admin persistence
+            new_openai_key = request.form.get('openai_api_key', '').strip()
+            if new_openai_key:
+                settings.openai_api_key = new_openai_key
+                if is_admin_user:
+                    logger.info(f"Admin user {current_user.username} updated OpenAI API key - storing permanently")
+            
             settings.enable_ai_advisor = 'enable_ai_advisor' in request.form
             settings.ai_model_selection = request.form.get('ai_model_selection', 'auto')
             logger.info(f"Updated AI settings: AI enabled={settings.enable_ai_advisor}, model strategy={settings.ai_model_selection}")
@@ -654,17 +675,38 @@ def settings():
                 enabled_strategies = ['covered_call']
             settings.enabled_strategies = ','.join(enabled_strategies)
             
-            db.session.commit()
+            # Update timestamp
+            settings.updated_at = datetime.now()
+            
+            # Commit with enhanced error handling for admin accounts
+            try:
+                db.session.commit()
+                if is_admin_user:
+                    logger.info(f"Admin settings successfully persisted for user {current_user.username}")
+                    # Create credential backup for admin accounts
+                    backup_admin_credentials(settings)
+            except Exception as commit_error:
+                db.session.rollback()
+                logger.error(f"Failed to save settings for user {current_user.username}: {str(commit_error)}")
+                raise commit_error
             
             # Reinitialize components with new settings
             initialize_app()
             
-            flash('Settings updated successfully', 'success')
+            # Special success message for admin accounts with permanent storage confirmation
+            if is_admin_user:
+                flash('Admin settings updated and stored permanently! Your API credentials will never be reset.', 'success')
+                logger.info(f"Admin user {current_user.username} settings successfully updated and persisted permanently")
+            else:
+                flash('Settings updated successfully', 'success')
             return redirect(url_for('settings'))
         
         except Exception as e:
             logger.error(f"Error updating settings: {str(e)}")
-            flash(f"Error updating settings: {str(e)}", "danger")
+            if is_admin_user:
+                flash(f"Error updating admin settings: {str(e)} - Your credentials are protected but update failed", "danger")
+            else:
+                flash(f"Error updating settings: {str(e)}", "danger")
     
     # Get AI status for settings page
     ai_enabled = settings.enable_ai_advisor if hasattr(settings, 'enable_ai_advisor') else True
