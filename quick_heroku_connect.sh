@@ -1,91 +1,77 @@
 #!/bin/bash
 
-# Quick Heroku Connection Script for Existing GitHub Repository
-# This script helps connect your existing GitHub repo to Heroku
+# Quick Heroku GitHub Connection Script
+# This bypasses Git issues by using Heroku CLI direct deployment
 
-echo "🔗 Connecting Existing GitHub Repository to Heroku"
-echo "================================================="
+echo "Setting up direct Heroku deployment..."
 
-# Get repository and app information
-read -p "Enter your GitHub repository URL: " GITHUB_REPO
-read -p "Enter your Heroku app name (or press Enter to create new): " HEROKU_APP
-
-# Check if Heroku CLI is available
+# Install Heroku CLI if not present
 if ! command -v heroku &> /dev/null; then
-    echo "❌ Heroku CLI not found. Please install it first."
-    echo "   Visit: https://devcenter.heroku.com/articles/heroku-cli"
-    exit 1
+    echo "Installing Heroku CLI..."
+    curl https://cli-assets.heroku.com/install.sh | sh
 fi
 
-# Login check
-if ! heroku auth:whoami &> /dev/null; then
-    echo "🔐 Please log in to Heroku:"
-    heroku login
-fi
+# Login to Heroku (user will need to provide auth)
+echo "Please run: heroku login"
+echo "Then run: heroku git:remote -a your-heroku-app-name"
 
-# Create Heroku app if needed
-if [ -z "$HEROKU_APP" ]; then
-    echo "📱 Creating new Heroku app..."
-    heroku create
-    HEROKU_APP=$(heroku apps:info --json | python3 -c "import sys, json; print(json.load(sys.stdin)['name'])")
-    echo "✅ Created app: $HEROKU_APP"
-else
-    echo "📱 Using existing app: $HEROKU_APP"
-fi
+# Create deployment command
+cat > deploy_to_heroku.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Direct Heroku deployment bypass for Git issues
+This deploys directly to Heroku without local Git operations
+"""
 
-# Add PostgreSQL if not exists
-echo "🗄️  Setting up database..."
-heroku addons:create heroku-postgresql:essential-0 --app $HEROKU_APP 2>/dev/null || echo "Database addon already exists"
+import subprocess
+import os
+import sys
 
-# Set basic configuration
-echo "⚙️  Setting basic configuration..."
-heroku config:set FLASK_ENV=production --app $HEROKU_APP
-heroku config:set REPLIT_DEV_DOMAIN="$HEROKU_APP.herokuapp.com" --app $HEROKU_APP
+def deploy_direct():
+    """Deploy directly to Heroku"""
+    print("Deploying to Heroku...")
+    
+    # Check if Heroku remote exists
+    try:
+        result = subprocess.run(['heroku', 'apps:info'], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            print("Please connect to your Heroku app first:")
+            print("heroku git:remote -a your-heroku-app-name")
+            return False
+    except FileNotFoundError:
+        print("Heroku CLI not found. Please install it first.")
+        return False
+    
+    # Create a temporary Git repository for deployment
+    temp_dir = "/tmp/heroku_deploy"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Copy files to temp directory
+    subprocess.run(['cp', '-r', '.', temp_dir], 
+                   capture_output=True)
+    
+    # Initialize Git in temp directory
+    os.chdir(temp_dir)
+    subprocess.run(['git', 'init'])
+    subprocess.run(['git', 'add', '.'])
+    subprocess.run(['git', 'commit', '-m', 'Deploy Arbion platform'])
+    
+    # Deploy to Heroku
+    result = subprocess.run(['git', 'push', 'heroku', 'main', '--force'])
+    
+    if result.returncode == 0:
+        print("✅ Successfully deployed to Heroku!")
+        return True
+    else:
+        print("❌ Deployment failed")
+        return False
 
-# Generate session secret if not set
-if ! heroku config:get SESSION_SECRET --app $HEROKU_APP &> /dev/null; then
-    SESSION_SECRET=$(openssl rand -base64 32)
-    heroku config:set SESSION_SECRET="$SESSION_SECRET" --app $HEROKU_APP
-fi
+if __name__ == "__main__":
+    deploy_direct()
+EOF
 
-# API credentials setup
-echo ""
-echo "🔑 API Credentials Setup"
-echo "Please provide your API credentials:"
+chmod +x deploy_to_heroku.py
 
-read -p "OpenAI API Key: " OPENAI_KEY
-if [ ! -z "$OPENAI_KEY" ]; then
-    heroku config:set OPENAI_API_KEY="$OPENAI_KEY" --app $HEROKU_APP
-fi
-
-read -p "Schwab API Key (Client ID): " SCHWAB_KEY
-if [ ! -z "$SCHWAB_KEY" ]; then
-    heroku config:set SCHWAB_API_KEY="$SCHWAB_KEY" --app $HEROKU_APP
-fi
-
-read -p "Schwab API Secret: " SCHWAB_SECRET
-if [ ! -z "$SCHWAB_SECRET" ]; then
-    heroku config:set SCHWAB_API_SECRET="$SCHWAB_SECRET" --app $HEROKU_APP
-fi
-
-# Add Heroku remote if not exists
-echo "🔗 Adding Heroku remote..."
-heroku git:remote -a $HEROKU_APP 2>/dev/null || echo "Heroku remote already exists"
-
-echo ""
-echo "✅ Setup Complete!"
-echo ""
-echo "📋 Next Steps for GitHub Integration:"
-echo "1. Go to: https://dashboard.heroku.com/apps/$HEROKU_APP"
-echo "2. Navigate to Deploy tab"
-echo "3. Connect to GitHub and select your repository"
-echo "4. Enable automatic deployments"
-echo ""
-echo "🔍 GitHub Secrets needed (Settings > Secrets > Actions):"
-echo "   HEROKU_API_KEY=$(heroku auth:token)"
-echo "   HEROKU_APP_NAME=$HEROKU_APP"
-echo "   HEROKU_EMAIL=$(heroku auth:whoami)"
-echo "   HEROKU_APP_URL=https://$HEROKU_APP.herokuapp.com"
-echo ""
-echo "🚀 Your app: https://$HEROKU_APP.herokuapp.com"
-echo "📊 Logs: heroku logs --tail --app $HEROKU_APP"
+echo "✅ Direct Heroku deployment setup complete!"
+echo "Run: python deploy_to_heroku.py"
