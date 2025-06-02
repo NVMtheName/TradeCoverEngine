@@ -74,10 +74,14 @@
         "heroku-postgresql:essential-0"
       ],
       "env": {
-        "FLASK_ENV": "testing"
+        "FLASK_ENV": "testing",
+        "OPENAI_API_KEY": "test-key",
+        "SCHWAB_API_KEY": "test-key",
+        "SCHWAB_API_SECRET": "test-secret"
       },
       "scripts": {
-        "test": "python -m pytest tests/ -v"
+        "test-setup": "python -c \"from app import app, db; app.app_context().push(); db.create_all()\"",
+        "test": "python run_tap_tests.py --unit"
       }
     }
   }
