@@ -1,31 +1,84 @@
 {
-  "name": "Trading Bot",
-  "description": "A sophisticated trading bot with multi-provider API integration",
-  "repository": "https://github.com/username/trading-bot",
-  "keywords": ["python", "flask", "trading", "bot", "api"],
-  "success_url": "/",
+  "name": "Arbion Trading Platform",
+  "description": "AI-powered trading platform with advanced market analysis and automated strategies",
+  "repository": "https://github.com/yourusername/arbion-trading-platform",
+  "logo": "https://raw.githubusercontent.com/yourusername/arbion-trading-platform/main/static/logo.png",
+  "keywords": [
+    "trading",
+    "fintech",
+    "ai",
+    "flask",
+    "python",
+    "postgresql",
+    "schwab-api",
+    "openai"
+  ],
+  "stack": "heroku-22",
   "buildpacks": [
     {
       "url": "heroku/python"
     }
   ],
-  "env": {
-    "FLASK_ENV": {
-      "description": "The environment to run the application in",
-      "value": "production"
-    },
-    "FLASK_SECRET_KEY": {
-      "description": "A secret key for verifying the integrity of signed cookies",
-      "generator": "secret"
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
     }
   },
   "addons": [
     {
-      "plan": "heroku-postgresql:mini",
+      "plan": "heroku-postgresql:essential-0",
       "as": "DATABASE"
     }
   ],
+  "env": {
+    "FLASK_ENV": {
+      "description": "Flask environment setting",
+      "value": "production"
+    },
+    "SESSION_SECRET": {
+      "description": "Secret key for Flask sessions",
+      "generator": "secret"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for AI-powered market analysis",
+      "required": true
+    },
+    "SCHWAB_API_KEY": {
+      "description": "Charles Schwab API client ID for trading operations",
+      "required": true
+    },
+    "SCHWAB_API_SECRET": {
+      "description": "Charles Schwab API client secret for trading operations",
+      "required": true
+    },
+    "GOOGLE_OAUTH_CLIENT_ID": {
+      "description": "Google OAuth client ID for authentication (optional)",
+      "required": false
+    },
+    "GOOGLE_OAUTH_CLIENT_SECRET": {
+      "description": "Google OAuth client secret for authentication (optional)",
+      "required": false
+    },
+    "REPLIT_DEV_DOMAIN": {
+      "description": "Domain for OAuth callbacks",
+      "required": false
+    }
+  },
   "scripts": {
-    "postdeploy": "python -c \"from app import app, db; app.app_context().push(); db.create_all()\""
+    "postdeploy": "python -c \"from app import app, db; app.app_context().push(); db.create_all(); print('Database initialized')\""
+  },
+  "environments": {
+    "test": {
+      "addons": [
+        "heroku-postgresql:essential-0"
+      ],
+      "env": {
+        "FLASK_ENV": "testing"
+      },
+      "scripts": {
+        "test": "python -m pytest tests/ -v"
+      }
+    }
   }
 }
