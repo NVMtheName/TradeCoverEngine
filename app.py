@@ -106,6 +106,10 @@ app.config['USE_SANDBOX'] = os.environ.get('USE_SANDBOX', 'true').lower() == 'tr
 # Import forms
 from forms import LoginForm, RegistrationForm
 
+# Initialize CSRF protection
+from flask_wtf.csrf import CSRFProtect
+csrf = CSRFProtect(app)
+
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
