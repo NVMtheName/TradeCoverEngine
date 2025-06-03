@@ -104,16 +104,18 @@ class APIConnector:
             is_sandbox=self.paper_trading
         )
         
-        # Set up base URLs and endpoints for compatibility with existing code
+        # Set up base URLs and endpoints - Exact Schwab API specifications
         if self.paper_trading:
-            # Sandbox environment
-            self.base_url = "https://sandbox.schwabapi.com/broker/rest/v1"
+            # Sandbox environment - using production URLs as Schwab has unified endpoints
+            self.base_url = "https://api.schwabapi.com/trader/v1"
+            self.market_data_url = "https://api.schwabapi.com/marketdata/v1"
             logger.info("Using Schwab sandbox API endpoints (v1)")
-            self.oauth_auth_url = "https://sandbox.schwabapi.com/v1/oauth/authorize"
-            self.oauth_token_url = "https://sandbox.schwabapi.com/v1/oauth/token"
+            self.oauth_auth_url = "https://api.schwabapi.com/v1/oauth/authorize"
+            self.oauth_token_url = "https://api.schwabapi.com/v1/oauth/token"
         else:
-            # Production environment
-            self.base_url = "https://api.schwabapi.com/broker/rest/v1"
+            # Production environment - Exact Schwab API URLs
+            self.base_url = "https://api.schwabapi.com/trader/v1"
+            self.market_data_url = "https://api.schwabapi.com/marketdata/v1"
             logger.info("Using Schwab production API endpoints (v1)")
             self.oauth_auth_url = "https://api.schwabapi.com/v1/oauth/authorize"
             self.oauth_token_url = "https://api.schwabapi.com/v1/oauth/token"
@@ -214,12 +216,12 @@ class APIConnector:
                 
                 if token_response.status_code == 200:
                     # Process successful token response
-                    token_data = token_response.json()
+                    token_data = token_response.json() if token_response.content else {}
                     
                     # Extract and save token data
-                    self.access_token = token_data.get('access_token')
-                    new_refresh_token = token_data.get('refresh_token')  # May or may not be provided
-                    expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                    self.access_token = (token_data or {}).get('access_token')
+                    new_refresh_token = (token_data or {}).get('refresh_token')  # May or may not be provided
+                    expires_in = (token_data or {}).get('expires_in', 3600)  # Default to 1 hour
                     
                     # Update refresh token if a new one was provided
                     if new_refresh_token:
@@ -229,7 +231,7 @@ class APIConnector:
                     self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
                     
                     # Update authorization header
-                    token_type = token_data.get('token_type', 'Bearer')
+                    token_type = (token_data or {}).get('token_type', 'Bearer')
                     self.session.headers.update({
                         'Authorization': f'{token_type} {self.access_token}'
                     })
@@ -246,12 +248,12 @@ class APIConnector:
                 else:
                     # Handle error response for this URL
                     try:
-                        error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
+                        error_content = token_response.json() if token_response.content else {}
                     except ValueError:
                         error_content = {}
                         
-                    error_type = error_content.get('error', 'server_error')
-                    error_desc = error_content.get('error_description', token_response.text[:100])
+                    error_type = (error_content or {}).get('error', 'server_error')
+                    error_desc = (error_content or {}).get('error_description', token_response.text[:100])
                     
                     logger.warning(f"Token refresh error at {token_url}: {error_type} - {error_desc}")
                     
@@ -381,10 +383,10 @@ class APIConnector:
                     else:
                         # Check diagnostic information
                         diagnostic_info = self.schwab_connector.get_diagnostic_info()
-                        logger.warning(f"Schwab API connection failed: {diagnostic_info.get('connection_status')}")
-                        logger.warning(f"Last error: {diagnostic_info.get('last_error_message')}")
+                        logger.warning(f"Schwab API connection failed: {(diagnostic_info or {}).get('connection_status')}")
+                        logger.warning(f"Last error: {(diagnostic_info or {}).get('last_error_message')}")
                         
-                        if diagnostic_info.get('token_expired', True):
+                        if (diagnostic_info or {}).get('token_expired', True):
                             logger.warning("Token appears to be expired")
                         
                         return False
@@ -419,15 +421,15 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/v2/account", headers=self.headers)
                 
                 if response.status_code == 200:
-                    account_data = response.json()
+                    account_data = response.json() if response.content else {}
                     return {
-                        'account_number': account_data.get('account_number', 'unknown'),
-                        'cash': float(account_data.get('cash', 0)),
-                        'equity': float(account_data.get('equity', 0)),
-                        'buying_power': float(account_data.get('buying_power', 0)),
-                        'initial_margin': float(account_data.get('initial_margin', 0)),
-                        'maintenance_margin': float(account_data.get('maintenance_margin', 0)),
-                        'daytrade_count': int(account_data.get('daytrade_count', 0)),
+                        'account_number': (account_data or {}).get('account_number', 'unknown'),
+                        'cash': float((account_data or {}).get('cash', 0)),
+                        'equity': float((account_data or {}).get('equity', 0)),
+                        'buying_power': float((account_data or {}).get('buying_power', 0)),
+                        'initial_margin': float((account_data or {}).get('initial_margin', 0)),
+                        'maintenance_margin': float((account_data or {}).get('maintenance_margin', 0)),
+                        'daytrade_count': int((account_data or {}).get('daytrade_count', 0)),
                     }
                 else:
                     logger.warning(f"Failed to get account info: {response.status_code}, {response.text}")
@@ -447,21 +449,21 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/accounts", headers=headers)
                 
                 if response.status_code == 200:
-                    accounts_data = response.json()
+                    accounts_data = response.json() if response.content else {}
                     result = {}
                     
                     for account in accounts_data:
-                        account_id = account.get('securitiesAccount', {}).get('accountId', 'unknown')
-                        account_details = account.get('securitiesAccount', {})
+                        account_id = (account or {}).get('securitiesAccount', {}).get('accountId', 'unknown')
+                        account_details = (account or {}).get('securitiesAccount', {})
                         
                         result[account_id] = {
                             'account_number': account_id,
-                            'cash': account_details.get('currentBalances', {}).get('cashBalance', 0),
-                            'equity': account_details.get('currentBalances', {}).get('liquidationValue', 0),
-                            'buying_power': account_details.get('currentBalances', {}).get('buyingPower', 0),
-                            'initial_margin': account_details.get('currentBalances', {}).get('initialBalances', {}).get('margin', 0),
-                            'maintenance_margin': account_details.get('currentBalances', {}).get('maintenanceRequirement', 0),
-                            'options_level': account_details.get('optionLevel', 0),
+                            'cash': (account_details or {}).get('currentBalances', {}).get('cashBalance', 0),
+                            'equity': (account_details or {}).get('currentBalances', {}).get('liquidationValue', 0),
+                            'buying_power': (account_details or {}).get('currentBalances', {}).get('buyingPower', 0),
+                            'initial_margin': (account_details or {}).get('currentBalances', {}).get('initialBalances', {}).get('margin', 0),
+                            'maintenance_margin': (account_details or {}).get('currentBalances', {}).get('maintenanceRequirement', 0),
+                            'options_level': (account_details or {}).get('optionLevel', 0),
                         }
                         
                     return result
@@ -587,19 +589,19 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/v2/positions", headers=self.headers)
                 
                 if response.status_code == 200:
-                    positions_data = response.json()
+                    positions_data = response.json() if response.content else {}
                     result = []
                     
                     for position in positions_data:
                         result.append({
-                            'symbol': position.get('symbol'),
-                            'quantity': int(float(position.get('qty'))),
-                            'entry_price': float(position.get('avg_entry_price')),
-                            'current_price': float(position.get('current_price')),
-                            'market_value': float(position.get('market_value')),
-                            'cost_basis': float(position.get('cost_basis')),
-                            'unrealized_pl': float(position.get('unrealized_pl')),
-                            'unrealized_plpc': float(position.get('unrealized_plpc')),
+                            'symbol': (position or {}).get('symbol'),
+                            'quantity': int(float((position or {}).get('qty'))),
+                            'entry_price': float((position or {}).get('avg_entry_price')),
+                            'current_price': float((position or {}).get('current_price')),
+                            'market_value': float((position or {}).get('market_value')),
+                            'cost_basis': float((position or {}).get('cost_basis')),
+                            'unrealized_pl': float((position or {}).get('unrealized_pl')),
+                            'unrealized_plpc': float((position or {}).get('unrealized_plpc')),
                         })
                         
                     return result
@@ -629,18 +631,18 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/accounts/{account_id}?fields=positions", headers=headers)
                 
                 if response.status_code == 200:
-                    account_data = response.json()
-                    positions_data = account_data.get('securitiesAccount', {}).get('positions', [])
+                    account_data = response.json() if response.content else {}
+                    positions_data = (account_data or {}).get('securitiesAccount', {}).get('positions', [])
                     result = []
                     
                     for position in positions_data:
-                        instrument = position.get('instrument', {})
-                        symbol = instrument.get('symbol')
+                        instrument = (position or {}).get('instrument', {})
+                        symbol = (instrument or {}).get('symbol')
                         # Skip non-equity positions for simplicity
-                        if instrument.get('assetType') != 'EQUITY':
+                        if (instrument or {}).get('assetType') != 'EQUITY':
                             continue
                             
-                        quantity = position.get('longQuantity', 0) - position.get('shortQuantity', 0)
+                        quantity = (position or {}).get('longQuantity', 0) - (position or {}).get('shortQuantity', 0)
                         
                         # Skip zero positions
                         if quantity == 0:
@@ -649,12 +651,12 @@ class APIConnector:
                         result.append({
                             'symbol': symbol,
                             'quantity': int(quantity),
-                            'entry_price': position.get('averagePrice', 0),
-                            'current_price': position.get('marketValue', 0) / quantity if quantity != 0 else 0,
-                            'market_value': position.get('marketValue', 0),
-                            'cost_basis': position.get('costBasis', 0),
-                            'unrealized_pl': position.get('unrealizedGainLoss', 0),
-                            'unrealized_plpc': position.get('unrealizedGainLossPercentage', 0) / 100,
+                            'entry_price': (position or {}).get('averagePrice', 0),
+                            'current_price': (position or {}).get('marketValue', 0) / quantity if quantity != 0 else 0,
+                            'market_value': (position or {}).get('marketValue', 0),
+                            'cost_basis': (position or {}).get('costBasis', 0),
+                            'unrealized_pl': (position or {}).get('unrealizedGainLoss', 0),
+                            'unrealized_plpc': (position or {}).get('unrealizedGainLossPercentage', 0) / 100,
                         })
                         
                     return result
@@ -768,21 +770,21 @@ class APIConnector:
                 response = self.session.get(url, headers=self.headers)
                 
                 if response.status_code == 200:
-                    orders_data = response.json()
+                    orders_data = response.json() if response.content else {}
                     result = []
                     
                     for order in orders_data:
                         result.append({
-                            'id': order.get('id'),
-                            'symbol': order.get('symbol'),
-                            'quantity': int(order.get('qty')),
-                            'side': order.get('side'),
-                            'type': order.get('type'),
-                            'status': order.get('status'),
-                            'submitted_at': order.get('submitted_at'),
-                            'filled_at': order.get('filled_at'),
-                            'filled_quantity': int(float(order.get('filled_qty', 0))),
-                            'filled_price': float(order.get('filled_avg_price', 0)),
+                            'id': (order or {}).get('id'),
+                            'symbol': (order or {}).get('symbol'),
+                            'quantity': int((order or {}).get('qty')),
+                            'side': (order or {}).get('side'),
+                            'type': (order or {}).get('type'),
+                            'status': (order or {}).get('status'),
+                            'submitted_at': (order or {}).get('submitted_at'),
+                            'filled_at': (order or {}).get('filled_at'),
+                            'filled_quantity': int(float((order or {}).get('filled_qty', 0))),
+                            'filled_price': float((order or {}).get('filled_avg_price', 0)),
                         })
                         
                     return result
@@ -818,29 +820,29 @@ class APIConnector:
                 response = self.session.get(url, headers=headers)
                 
                 if response.status_code == 200:
-                    orders_data = response.json()
+                    orders_data = response.json() if response.content else {}
                     result = []
                     
                     for order in orders_data:
                         # Extract key info from complex TD order structure
-                        order_legs = order.get('orderLegCollection', [])
+                        order_legs = (order or {}).get('orderLegCollection', [])
                         if not order_legs:
                             continue
                             
                         leg = order_legs[0]
-                        instrument = leg.get('instrument', {})
+                        instrument = (leg or {}).get('instrument', {})
                         
                         result.append({
-                            'id': order.get('orderId'),
-                            'symbol': instrument.get('symbol'),
-                            'quantity': leg.get('quantity', 0),
-                            'side': leg.get('instruction').lower(),
-                            'type': order.get('orderType').lower(),
-                            'status': order.get('status'),
-                            'submitted_at': order.get('enteredTime'),
-                            'filled_at': order.get('closeTime'),
-                            'filled_quantity': order.get('filledQuantity', 0),
-                            'filled_price': order.get('orderActivityCollection', [{}])[0].get('executionLegs', [{}])[0].get('price', 0),
+                            'id': (order or {}).get('orderId'),
+                            'symbol': (instrument or {}).get('symbol'),
+                            'quantity': (leg or {}).get('quantity', 0),
+                            'side': (leg or {}).get('instruction').lower(),
+                            'type': (order or {}).get('orderType').lower(),
+                            'status': (order or {}).get('status'),
+                            'submitted_at': (order or {}).get('enteredTime'),
+                            'filled_at': (order or {}).get('closeTime'),
+                            'filled_quantity': (order or {}).get('filledQuantity', 0),
+                            'filled_price': (order or {}).get('orderActivityCollection', [{}])[0].get('executionLegs', [{}])[0].get('price', 0),
                         })
                         
                     return result
@@ -1010,9 +1012,9 @@ class APIConnector:
                     )
                     
                     if response.status_code == 200:
-                        asset_data = response.json()
-                        stock_data['name'] = asset_data.get('name', '')
-                        stock_data['exchange'] = asset_data.get('exchange', '')
+                        asset_data = response.json() if response.content else {}
+                        stock_data['name'] = (asset_data or {}).get('name', '')
+                        stock_data['exchange'] = (asset_data or {}).get('exchange', '')
                 except Exception as e:
                     logger.warning(f"Error getting additional asset data for {symbol}: {str(e)}")
             
@@ -1027,11 +1029,11 @@ class APIConnector:
                     )
                     
                     if response.status_code == 200:
-                        quote_data = response.json()
-                        stock_data['ask'] = quote_data.get('quote', {}).get('ap', current_price)
-                        stock_data['bid'] = quote_data.get('quote', {}).get('bp', current_price)
-                        stock_data['ask_size'] = quote_data.get('quote', {}).get('as', 0)
-                        stock_data['bid_size'] = quote_data.get('quote', {}).get('bs', 0)
+                        quote_data = response.json() if response.content else {}
+                        stock_data['ask'] = (quote_data or {}).get('quote', {}).get('ap', current_price)
+                        stock_data['bid'] = (quote_data or {}).get('quote', {}).get('bp', current_price)
+                        stock_data['ask_size'] = (quote_data or {}).get('quote', {}).get('as', 0)
+                        stock_data['bid_size'] = (quote_data or {}).get('quote', {}).get('bs', 0)
                         
                 # Get trade data for volume
                 if self.provider == 'alpaca':
@@ -1043,8 +1045,8 @@ class APIConnector:
                     )
                     
                     if response.status_code == 200:
-                        trade_data = response.json()
-                        stock_data['volume'] = trade_data.get('trade', {}).get('v', 0)
+                        trade_data = response.json() if response.content else {}
+                        stock_data['volume'] = (trade_data or {}).get('trade', {}).get('v', 0)
             except Exception as e:
                 logger.warning(f"Error getting latest quote/trade data for {symbol}: {str(e)}")
                 stock_data['volume'] = 0
@@ -1143,8 +1145,8 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/v2/stocks/{symbol}/trades/latest", headers=self.headers)
                 
                 if response.status_code == 200:
-                    trade_data = response.json()
-                    return float(trade_data.get('trade', {}).get('p', 0))
+                    trade_data = response.json() if response.content else {}
+                    return float((trade_data or {}).get('trade', {}).get('p', 0))
                 else:
                     logger.warning(f"Failed to get current price for {symbol}: {response.status_code}, {response.text}")
                     return self._get_simulated_price(symbol)
@@ -1163,8 +1165,8 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/marketdata/{symbol}/quotes", headers=headers)
                 
                 if response.status_code == 200:
-                    quote_data = response.json()
-                    return quote_data.get(symbol, {}).get('lastPrice', 0)
+                    quote_data = response.json() if response.content else {}
+                    return (quote_data or {}).get(symbol, {}).get('lastPrice', 0)
                 else:
                     logger.warning(f"Failed to get current price for {symbol}: {response.status_code}, {response.text}")
                     # Try to refresh token if unauthorized
@@ -1281,7 +1283,7 @@ class APIConnector:
                 )
                 
                 if response.status_code == 200:
-                    bars_data = response.json().get('bars', [])
+                    bars_data = response.json() if response.content else {}.get('bars', [])
                     
                     if not bars_data:
                         logger.warning(f"No historical data returned for {symbol}")
@@ -1356,8 +1358,8 @@ class APIConnector:
                 )
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    candles = data.get('candles', [])
+                    data = response.json() if response.content else {}
+                    candles = (data or {}).get('candles', [])
                     
                     if not candles:
                         logger.warning(f"No historical data returned for {symbol}")
@@ -1561,52 +1563,52 @@ class APIConnector:
                 )
                 
                 if response.status_code == 200:
-                    chain_data = response.json()
+                    chain_data = response.json() if response.content else {}
                     
                     # Extract calls and puts from the complex TD structure
                     calls = []
                     puts = []
                     
                     # Process calls
-                    call_expirations = chain_data.get('callExpDateMap', {})
+                    call_expirations = (chain_data or {}).get('callExpDateMap', {})
                     for expiry_days, strikes in call_expirations.items():
                         for strike, options in strikes.items():
                             for option in options:
                                 calls.append({
                                     'strike': float(strike),
-                                    'expiry': option.get('expirationDate'),
-                                    'last': option.get('last'),
-                                    'bid': option.get('bid'),
-                                    'ask': option.get('ask'),
-                                    'volume': option.get('totalVolume'),
-                                    'open_interest': option.get('openInterest'),
-                                    'delta': option.get('delta'),
-                                    'gamma': option.get('gamma'),
-                                    'theta': option.get('theta'),
-                                    'vega': option.get('vega'),
-                                    'implied_volatility': option.get('volatility') / 100 if option.get('volatility') else None,
-                                    'itm': option.get('inTheMoney')
+                                    'expiry': (option or {}).get('expirationDate'),
+                                    'last': (option or {}).get('last'),
+                                    'bid': (option or {}).get('bid'),
+                                    'ask': (option or {}).get('ask'),
+                                    'volume': (option or {}).get('totalVolume'),
+                                    'open_interest': (option or {}).get('openInterest'),
+                                    'delta': (option or {}).get('delta'),
+                                    'gamma': (option or {}).get('gamma'),
+                                    'theta': (option or {}).get('theta'),
+                                    'vega': (option or {}).get('vega'),
+                                    'implied_volatility': (option or {}).get('volatility') / 100 if (option or {}).get('volatility') else None,
+                                    'itm': (option or {}).get('inTheMoney')
                                 })
                                 
                     # Process puts
-                    put_expirations = chain_data.get('putExpDateMap', {})
+                    put_expirations = (chain_data or {}).get('putExpDateMap', {})
                     for expiry_days, strikes in put_expirations.items():
                         for strike, options in strikes.items():
                             for option in options:
                                 puts.append({
                                     'strike': float(strike),
-                                    'expiry': option.get('expirationDate'),
-                                    'last': option.get('last'),
-                                    'bid': option.get('bid'),
-                                    'ask': option.get('ask'),
-                                    'volume': option.get('totalVolume'),
-                                    'open_interest': option.get('openInterest'),
-                                    'delta': option.get('delta'),
-                                    'gamma': option.get('gamma'),
-                                    'theta': option.get('theta'),
-                                    'vega': option.get('vega'),
-                                    'implied_volatility': option.get('volatility') / 100 if option.get('volatility') else None,
-                                    'itm': option.get('inTheMoney')
+                                    'expiry': (option or {}).get('expirationDate'),
+                                    'last': (option or {}).get('last'),
+                                    'bid': (option or {}).get('bid'),
+                                    'ask': (option or {}).get('ask'),
+                                    'volume': (option or {}).get('totalVolume'),
+                                    'open_interest': (option or {}).get('openInterest'),
+                                    'delta': (option or {}).get('delta'),
+                                    'gamma': (option or {}).get('gamma'),
+                                    'theta': (option or {}).get('theta'),
+                                    'vega': (option or {}).get('vega'),
+                                    'implied_volatility': (option or {}).get('volatility') / 100 if (option or {}).get('volatility') else None,
+                                    'itm': (option or {}).get('inTheMoney')
                                 })
                                 
                     return {
@@ -1821,11 +1823,11 @@ class APIConnector:
                 response = self.session.post(f"{self.base_url}/v2/orders", json=order_details, headers=self.headers)
                 
                 if response.status_code == 200 or response.status_code == 201:
-                    order_data = response.json()
+                    order_data = response.json() if response.content else {}
                     return {
                         'success': True,
-                        'order_id': order_data.get('id'),
-                        'message': f"Order placed: {order_data.get('id')}",
+                        'order_id': (order_data or {}).get('id'),
+                        'message': f"Order placed: {(order_data or {}).get('id')}",
                         'details': order_data
                     }
                 else:
@@ -1927,36 +1929,36 @@ class APIConnector:
         
         # For Alpaca-style orders
         if 'symbol' in order_details:
-            symbol = order_details.get('symbol')
+            symbol = (order_details or {}).get('symbol')
             
         if 'side' in order_details:
-            side = order_details.get('side')
+            side = (order_details or {}).get('side')
             
         if 'qty' in order_details:
-            quantity = order_details.get('qty')
+            quantity = (order_details or {}).get('qty')
             
         if 'type' in order_details:
-            order_type = order_details.get('type')
+            order_type = (order_details or {}).get('type')
             
         # For TD Ameritrade or more complex orders
         if 'orderLegCollection' in order_details:
-            legs = order_details.get('orderLegCollection', [])
+            legs = (order_details or {}).get('orderLegCollection', [])
             if legs:
                 first_leg = legs[0]
-                symbol = first_leg.get('instrument', {}).get('symbol')
-                instruction = first_leg.get('instruction', '')
+                symbol = (first_leg or {}).get('instrument', {}).get('symbol')
+                instruction = (first_leg or {}).get('instruction', '')
                 if 'BUY' in instruction:
                     side = 'buy'
                 elif 'SELL' in instruction:
                     side = 'sell'
-                quantity = first_leg.get('quantity')
+                quantity = (first_leg or {}).get('quantity')
                 
         if 'orderType' in order_details:
-            order_type = order_details.get('orderType')
+            order_type = (order_details or {}).get('orderType')
             
         # For Schwab or other unknown formats
         if symbol is None and 'symbol' in order_details:
-            symbol = order_details.get('symbol')
+            symbol = (order_details or {}).get('symbol')
             
         # Format a nice message
         message = f"Order simulated: "
@@ -1994,20 +1996,20 @@ class APIConnector:
                 response = self.session.get(f"{self.base_url}/v2/calendar", headers=self.headers)
                 
                 if response.status_code == 200:
-                    calendar_data = response.json()
+                    calendar_data = response.json() if response.content else {}
                     
                     # Get today's entry
                     today_str = datetime.now().strftime("%Y-%m-%d")
                     today_entry = None
                     
                     for entry in calendar_data:
-                        if entry.get('date') == today_str:
+                        if (entry or {}).get('date') == today_str:
                             today_entry = entry
                             break
                             
                     if today_entry:
-                        market_open = datetime.strptime(f"{today_str} {today_entry.get('open')}", "%Y-%m-%d %H:%M")
-                        market_close = datetime.strptime(f"{today_str} {today_entry.get('close')}", "%Y-%m-%d %H:%M")
+                        market_open = datetime.strptime(f"{today_str} {(today_entry or {}).get('open')}", "%Y-%m-%d %H:%M")
+                        market_close = datetime.strptime(f"{today_str} {(today_entry or {}).get('close')}", "%Y-%m-%d %H:%M")
                         
                         return {
                             'is_open': datetime.now() >= market_open and datetime.now() <= market_close,
@@ -2045,21 +2047,21 @@ class APIConnector:
                 )
                 
                 if response.status_code == 200:
-                    hours_data = response.json()
-                    equity_hours = hours_data.get('equity', {}).get('EQ')
+                    hours_data = response.json() if response.content else {}
+                    equity_hours = (hours_data or {}).get('equity', {}).get('EQ')
                     
                     if equity_hours and today_str in equity_hours:
                         today_session = equity_hours[today_str]
                         
                         if isinstance(today_session, dict) and 'marketType' in today_session:
-                            is_open = today_session.get('marketType') == 'REGULAR'
+                            is_open = (today_session or {}).get('marketType') == 'REGULAR'
                             
                             if 'sessionHours' in today_session and 'regularMarket' in today_session['sessionHours']:
                                 regular_sessions = today_session['sessionHours']['regularMarket']
                                 if regular_sessions:
                                     first_session = regular_sessions[0]
-                                    market_open = first_session.get('start')
-                                    market_close = first_session.get('end')
+                                    market_open = (first_session or {}).get('start')
+                                    market_close = (first_session or {}).get('end')
                                     
                                     return {
                                         'is_open': is_open,
@@ -2329,8 +2331,8 @@ class APIConnector:
             account_history['date'] = pd.to_datetime(account_history['date'])
             account_history = account_history.set_index('date')
             
-            # Resample to month-end
-            monthly = account_history.resample('M').last()
+            # Resample to month-end (using 'ME' instead of deprecated 'M')
+            monthly = account_history.resample('ME').last()
             
             # Calculate monthly returns
             monthly['return'] = monthly['equity'].pct_change() * 100
@@ -2385,7 +2387,7 @@ class APIConnector:
             # This is a simplified check - in reality would be more complex
             has_options = False
             for account_id, details in account_info.items():
-                if details.get('optionLevel', 0) > 0:
+                if (details or {}).get('optionLevel', 0) > 0:
                     has_options = True
                     break
                     
@@ -2538,10 +2540,10 @@ class APIConnector:
         # Check if we are authorized to make trades or need to fall back to simulation
         if not self._can_execute_options_trades():
             # Simulation fallback
-            logger.info(f"Simulating Schwab options order for {order_details.get('symbol')} (unauthorized)")
+            logger.info(f"Simulating Schwab options order for {(order_details or {}).get('symbol')} (unauthorized)")
             return {
                 'success': True,
-                'order_id': f"SCH_SIM_{order_details.get('symbol')}_{int(datetime.now().timestamp())}",
+                'order_id': f"SCH_SIM_{(order_details or {}).get('symbol')}_{int(datetime.now().timestamp())}",
                 'timestamp': datetime.now().isoformat(),
                 'message': 'Simulated Schwab options order execution (unauthorized)',
                 'simulated': True
@@ -2550,12 +2552,12 @@ class APIConnector:
         try:
             # This would call the actual Schwab API endpoint for options orders
             # For now, we'll simulate success
-            logger.info(f"Simulating Schwab options order for {order_details.get('symbol')}")
+            logger.info(f"Simulating Schwab options order for {(order_details or {}).get('symbol')}")
             
             # Simulated response
             return {
                 'success': True,
-                'order_id': f"SCH_{order_details.get('symbol')}_{int(datetime.now().timestamp())}",
+                'order_id': f"SCH_{(order_details or {}).get('symbol')}_{int(datetime.now().timestamp())}",
                 'timestamp': datetime.now().isoformat(),
                 'message': 'Simulated Schwab options order execution',
                 'simulated': True

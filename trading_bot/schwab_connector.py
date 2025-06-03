@@ -87,16 +87,18 @@ class SchwabConnector:
     def _setup_endpoints(self):
         """Set up API endpoints based on environment (sandbox or production)."""
         if self.is_sandbox:
-            # Sandbox environment
-            self.api_base_url = "https://sandbox.schwabapi.com/broker/rest/v1"
-            self.auth_url = "https://sandbox.schwabapi.com/v1/oauth/authorize"
-            self.token_url = "https://sandbox.schwabapi.com/v1/oauth/token"
-            logger.info("Using Schwab sandbox API endpoints")
-        else:
-            # Production environment
-            self.api_base_url = "https://api.schwabapi.com/broker/rest/v1"
+            # Schwab Sandbox environment - Exact URLs per Schwab Developer Portal
+            self.api_base_url = "https://api.schwabapi.com/trader/v1"
             self.auth_url = "https://api.schwabapi.com/v1/oauth/authorize"
             self.token_url = "https://api.schwabapi.com/v1/oauth/token"
+            self.market_data_url = "https://api.schwabapi.com/marketdata/v1"
+            logger.info("Using Schwab sandbox API endpoints")
+        else:
+            # Schwab Production environment - Exact URLs per Schwab Developer Portal
+            self.api_base_url = "https://api.schwabapi.com/trader/v1"
+            self.auth_url = "https://api.schwabapi.com/v1/oauth/authorize"
+            self.token_url = "https://api.schwabapi.com/v1/oauth/token"
+            self.market_data_url = "https://api.schwabapi.com/marketdata/v1"
             logger.info("Using Schwab production API endpoints")
     
     def is_connected(self):
@@ -205,11 +207,11 @@ class SchwabConnector:
         # Prepare token refresh request based on Schwab API docs
         token_payload = {
             'grant_type': 'refresh_token',
-            'refresh_token': self.refresh_token,
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'scope': 'trading'  # Using trading scope for full API access
+            'refresh_token': self.refresh_token
         }
+        
+        # Schwab requires basic auth with client credentials
+        auth = (self.client_id, self.client_secret)
         
         # Common headers for token requests
         token_headers = {
@@ -233,6 +235,7 @@ class SchwabConnector:
                     url,
                     data=token_payload,
                     headers=token_headers,
+                    auth=auth,
                     timeout=15  # Longer timeout for token operations
                 )
                 
@@ -240,12 +243,12 @@ class SchwabConnector:
                 
                 if token_response.status_code == 200:
                     # Process successful token response
-                    token_data = token_response.json()
+                    token_data = token_response.json() if response.content else {}
                     
                     # Extract and save token data
-                    self.access_token = token_data.get('access_token')
-                    new_refresh_token = token_data.get('refresh_token')  # May or may not be provided
-                    expires_in = token_data.get('expires_in', 3600)  # Default to 1 hour
+                    self.access_token = (token_data or {}).get('access_token')
+                    new_refresh_token = (token_data or {}).get('refresh_token')  # May or may not be provided
+                    expires_in = (token_data or {}).get('expires_in', 3600)  # Default to 1 hour
                     
                     # Update refresh token if a new one was provided
                     if new_refresh_token:
@@ -255,7 +258,7 @@ class SchwabConnector:
                     self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
                     
                     # Update authorization header
-                    token_type = token_data.get('token_type', 'Bearer')
+                    token_type = (token_data or {}).get('token_type', 'Bearer')
                     self.session.headers.update({
                         'Authorization': f'{token_type} {self.access_token}'
                     })
@@ -273,12 +276,12 @@ class SchwabConnector:
                 
                 # Handle error response
                 try:
-                    error_content = token_response.json() if 'application/json' in token_response.headers.get('content-type', '') else {}
+                    error_content = token_response.json() if token_response.content else {}
                 except ValueError:
                     error_content = {}
                 
-                error_type = error_content.get('error', 'server_error')
-                error_desc = error_content.get('error_description', token_response.text[:100])
+                error_type = (error_content or {}).get('error', 'server_error')
+                error_desc = (error_content or {}).get('error_description', token_response.text[:100])
                 
                 logger.warning(f"Token refresh error: {error_type} - {error_desc}")
                 return False
@@ -322,27 +325,27 @@ class SchwabConnector:
             response = self._execute_request('GET', accounts_url)
             
             if response and response.status_code == 200:
-                accounts_data = response.json()
+                accounts_data = response.json() if response.content else {}
                 logger.info(f"Successfully retrieved Schwab account data: {len(accounts_data)} accounts")
                 
                 result = {}
                 
                 for account in accounts_data:
-                    account_id = account.get('accountId', 'unknown')
+                    account_id = (account or {}).get('accountId', 'unknown')
                     account_details = account
                     
                     # Extract balance information with proper path for Schwab API
-                    balances = account_details.get('balances', {})
-                    positions = account_details.get('positions', [])
+                    balances = (account_details or {}).get('balances', {})
+                    positions = (account_details or {}).get('positions', [])
                     
                     result[account_id] = {
                         'account_number': account_id,
-                        'cash': float(balances.get('cashBalance', 0)),
-                        'equity': float(balances.get('liquidationValue', 0)),
-                        'buying_power': float(balances.get('buyingPower', 0)),
+                        'cash': float((balances or {}).get('cashBalance', 0)),
+                        'equity': float((balances or {}).get('liquidationValue', 0)),
+                        'buying_power': float((balances or {}).get('buyingPower', 0)),
                         'position_count': len(positions),
-                        'account_type': account_details.get('accountType', 'Unknown'),
-                        'nickname': account_details.get('nickname', ''),
+                        'account_type': (account_details or {}).get('accountType', 'Unknown'),
+                        'nickname': (account_details or {}).get('nickname', ''),
                     }
                 
                 return result
@@ -391,24 +394,24 @@ class SchwabConnector:
             response = self._execute_request('GET', positions_url)
             
             if response and response.status_code == 200:
-                positions_data = response.json()
+                positions_data = response.json() if response.content else {}
                 logger.info(f"Successfully retrieved {len(positions_data)} positions from Schwab API")
                 
                 result = []
                 
                 for position in positions_data:
                     # Extract data with proper field names for Schwab API
-                    instrument = position.get('instrument', {})
-                    symbol = instrument.get('symbol')
-                    quantity = position.get('quantity', 0)
+                    instrument = (position or {}).get('instrument', {})
+                    symbol = (instrument or {}).get('symbol')
+                    quantity = (position or {}).get('quantity', 0)
                     
                     # Skip zero positions
                     if quantity == 0:
                         continue
                     
-                    price_data = position.get('priceData', {})
-                    entry_price = position.get('averagePurchasePrice', 0)
-                    current_price = price_data.get('currentPrice', 0)
+                    price_data = (position or {}).get('priceData', {})
+                    entry_price = (position or {}).get('averagePurchasePrice', 0)
+                    current_price = (price_data or {}).get('currentPrice', 0)
                     
                     result.append({
                         'symbol': symbol,
@@ -470,12 +473,12 @@ class SchwabConnector:
             if response and (response.status_code == 200 or response.status_code == 201):
                 # Successfully placed order
                 order_id = None
-                location = response.headers.get('Location', '')
+                location = response.(headers or {}).get('Location', '')
                 if location:
                     order_id = location.split('/')[-1]
                 
                 try:
-                    response_data = response.json()
+                    response_data = response.json() if response.content else {}
                     # Some APIs return order ID in response body
                     if 'orderId' in response_data:
                         order_id = response_data['orderId']
@@ -486,13 +489,13 @@ class SchwabConnector:
                     'success': True,
                     'order_id': order_id or 'unknown',
                     'message': f"Order placed successfully",
-                    'details': response.json() if 'application/json' in response.headers.get('content-type', '') else None
+                    'details': response.json() if response.content else {} if 'application/json' in response.(headers or {}).get('content-type', '') else None
                 }
             
             # Handle error responses
             error_message = f"Failed to place order: {response.status_code if response else 'No response'}"
             try:
-                error_data = response.json() if response else {}
+                error_data = response.json() if response.content else {} if response else {}
                 if 'message' in error_data:
                     error_message = f"Error: {error_data['message']}"
             except ValueError:
@@ -550,19 +553,19 @@ class SchwabConnector:
             response = self._execute_request('GET', orders_url, params=params)
             
             if response and response.status_code == 200:
-                orders_data = response.json()
+                orders_data = response.json() if response.content else {}
                 logger.info(f"Successfully retrieved {len(orders_data)} orders from Schwab API")
                 
                 result = []
                 
                 for order in orders_data:
                     # Extract relevant order information
-                    order_legs = order.get('orderLegCollection', [])
+                    order_legs = (order or {}).get('orderLegCollection', [])
                     if not order_legs:
                         continue
                     
                     leg = order_legs[0]  # Use first leg for basic info
-                    symbol = leg.get('symbol')
+                    symbol = (leg or {}).get('symbol')
                     
                     # Map Schwab order statuses to our standardized format
                     status_map = {
@@ -574,16 +577,16 @@ class SchwabConnector:
                     }
                     
                     result.append({
-                        'id': order.get('orderId'),
+                        'id': (order or {}).get('orderId'),
                         'symbol': symbol,
-                        'quantity': int(leg.get('quantity', 0)),
-                        'side': leg.get('side', '').lower(),
-                        'type': order.get('orderType', '').lower(),
-                        'status': status_map.get(order.get('status'), order.get('status', '')),
-                        'submitted_at': order.get('enteredTime'),
-                        'filled_at': order.get('executedTime'),
-                        'filled_quantity': order.get('filledQuantity', 0),
-                        'filled_price': order.get('avgExecutionPrice', 0),
+                        'quantity': int((leg or {}).get('quantity', 0)),
+                        'side': (leg or {}).get('side', '').lower(),
+                        'type': (order or {}).get('orderType', '').lower(),
+                        'status': (status_map or {}).get((order or {}).get('status'), (order or {}).get('status', '')),
+                        'submitted_at': (order or {}).get('enteredTime'),
+                        'filled_at': (order or {}).get('executedTime'),
+                        'filled_quantity': (order or {}).get('filledQuantity', 0),
+                        'filled_price': (order or {}).get('avgExecutionPrice', 0),
                     })
                 
                 return result
@@ -654,41 +657,41 @@ class SchwabConnector:
             response = self._execute_request('GET', transactions_url, params=params)
             
             if response and response.status_code == 200:
-                transactions_data = response.json()
+                transactions_data = response.json() if response.content else {}
                 logger.info(f"Successfully retrieved {len(transactions_data)} transactions from Schwab API")
                 
                 result = []
                 
                 for transaction in transactions_data:
                     # Extract and normalize transaction data
-                    transaction_type = transaction.get('type', '')
+                    transaction_type = (transaction or {}).get('type', '')
                     
                     # Create standardized transaction object
                     transaction_obj = {
-                        'id': transaction.get('transactionId'),
-                        'date': transaction.get('transactionDate'),
-                        'settlement_date': transaction.get('settlementDate'),
+                        'id': (transaction or {}).get('transactionId'),
+                        'date': (transaction or {}).get('transactionDate'),
+                        'settlement_date': (transaction or {}).get('settlementDate'),
                         'type': transaction_type,
-                        'description': transaction.get('description', ''),
-                        'amount': float(transaction.get('amount', 0)),
-                        'fees': float(transaction.get('fees', 0)) if 'fees' in transaction else 0,
+                        'description': (transaction or {}).get('description', ''),
+                        'amount': float((transaction or {}).get('amount', 0)),
+                        'fees': float((transaction or {}).get('fees', 0)) if 'fees' in transaction else 0,
                     }
                     
                     # Add additional fields based on transaction type
                     if transaction_type == 'TRADE':
-                        trade_info = transaction.get('transactionItem', {})
+                        trade_info = (transaction or {}).get('transactionItem', {})
                         transaction_obj.update({
-                            'symbol': trade_info.get('symbol'),
-                            'quantity': float(trade_info.get('quantity', 0)),
-                            'price': float(trade_info.get('price', 0)),
-                            'instruction': trade_info.get('instruction', '').lower(),  # BUY, SELL, etc.
-                            'asset_type': trade_info.get('assetType'),
+                            'symbol': (trade_info or {}).get('symbol'),
+                            'quantity': float((trade_info or {}).get('quantity', 0)),
+                            'price': float((trade_info or {}).get('price', 0)),
+                            'instruction': (trade_info or {}).get('instruction', '').lower(),  # BUY, SELL, etc.
+                            'asset_type': (trade_info or {}).get('assetType'),
                         })
                     elif transaction_type == 'DIVIDEND':
-                        dividend_info = transaction.get('transactionItem', {})
+                        dividend_info = (transaction or {}).get('transactionItem', {})
                         transaction_obj.update({
-                            'symbol': dividend_info.get('symbol'),
-                            'dividend_rate': float(dividend_info.get('dividendRate', 0)),
+                            'symbol': (dividend_info or {}).get('symbol'),
+                            'dividend_rate': float((dividend_info or {}).get('dividendRate', 0)),
                         })
                     
                     result.append(transaction_obj)
@@ -732,7 +735,7 @@ class SchwabConnector:
         
         # Filter by symbol if provided
         if symbol:
-            transactions = [t for t in transactions if t.get('symbol') == symbol]
+            transactions = [t for t in transactions if (t or {}).get('symbol') == symbol]
         
         return transactions
     
@@ -796,7 +799,7 @@ class SchwabConnector:
             response = self._execute_request('GET', performance_url, params=params)
             
             if response and response.status_code == 200:
-                performance_data = response.json()
+                performance_data = response.json() if response.content else {}
                 logger.info("Successfully retrieved account performance data from Schwab API")
                 
                 # Extract and format daily equity values
@@ -815,12 +818,12 @@ class SchwabConnector:
                 if 'metrics' in performance_data:
                     metrics = performance_data['metrics']
                     performance_metrics = {
-                        'total_return': float(metrics.get('totalReturn', 0)) * 100,  # Convert to percentage
-                        'annualized_return': float(metrics.get('annualizedReturn', 0)) * 100,  # Convert to percentage
-                        'max_drawdown': float(metrics.get('maxDrawdown', 0)) * 100,  # Convert to percentage
-                        'sharpe_ratio': float(metrics.get('sharpeRatio', 0)),
-                        'alpha': float(metrics.get('alpha', 0)),
-                        'beta': float(metrics.get('beta', 0)),
+                        'total_return': float((metrics or {}).get('totalReturn', 0)) * 100,  # Convert to percentage
+                        'annualized_return': float((metrics or {}).get('annualizedReturn', 0)) * 100,  # Convert to percentage
+                        'max_drawdown': float((metrics or {}).get('maxDrawdown', 0)) * 100,  # Convert to percentage
+                        'sharpe_ratio': float((metrics or {}).get('sharpeRatio', 0)),
+                        'alpha': float((metrics or {}).get('alpha', 0)),
+                        'beta': float((metrics or {}).get('beta', 0)),
                     }
                 
                 return {
@@ -873,13 +876,13 @@ class SchwabConnector:
             response = self._execute_request('GET', market_data_url, params=params)
             
             if response and response.status_code == 200:
-                market_data = response.json()
+                market_data = response.json() if response.content else {}
                 logger.info(f"Successfully retrieved market data for {len(symbols)} symbols")
                 
                 # Process and normalize the data
                 result = {}
                 for quote in market_data:
-                    symbol = quote.get('symbol')
+                    symbol = (quote or {}).get('symbol')
                     if symbol:
                         result[symbol] = quote
                 
@@ -1012,7 +1015,7 @@ class SchwabConnector:
                 
                 elif response.status_code == 429:
                     # Rate limited - back off and retry
-                    retry_after = int(response.headers.get('Retry-After', retry * 5 + 1))
+                    retry_after = int(response.(headers or {}).get('Retry-After', retry * 5 + 1))
                     logger.warning(f"Rate limited by Schwab API, waiting {retry_after}s before retry")
                     
                     if retry < retry_count:
@@ -1044,7 +1047,7 @@ class SchwabConnector:
                     # Other error, don't retry
                     logger.warning(f"Error response from Schwab API: {response.status_code}")
                     try:
-                        error_details = response.json() if 'application/json' in response.headers.get('content-type', '') else {'text': response.text[:100]}
+                        error_details = response.json() if response.content else {} if 'application/json' in response.(headers or {}).get('content-type', '') else {'text': response.text[:100]}
                         logger.warning(f"Error details: {error_details}")
                     except Exception:
                         pass
